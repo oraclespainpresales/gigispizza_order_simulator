@@ -16,10 +16,13 @@
 
 package io.helidon.examples.quickstart.mp;
 
+import java.util.Date;
+import java.util.Random;
+import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Collections;
-import java.util.Locale;
+//import java.util.logging.Logger;
 
 import javax.enterprise.context.RequestScoped;
 import javax.inject.Inject;
@@ -43,6 +46,8 @@ import org.eclipse.microprofile.openapi.annotations.parameters.RequestBody;
 import org.eclipse.microprofile.openapi.annotations.responses.APIResponse;
 import org.eclipse.microprofile.openapi.annotations.responses.APIResponses;
 
+import javassist.bytecode.analysis.Type;
+
 /**
  * A simple JAX-RS resource to greet you. Examples:
  *
@@ -60,7 +65,7 @@ import org.eclipse.microprofile.openapi.annotations.responses.APIResponses;
 @Path("/simulator")
 @RequestScoped
 public class SimulatorResource {
-
+    //private final static Logger LOGGER = Logger.getLogger(SimulatorResource.class.getName());
     private static final JsonBuilderFactory JSON = Json.createBuilderFactory(Collections.emptyMap());
 
     /**
@@ -154,41 +159,136 @@ public class SimulatorResource {
      */
     @SuppressWarnings("checkstyle:designforextension")
     @POST
+    @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    public JsonObject getCreateMessage() {
-        return createOrder();
+    @RequestBody(name = "sim-config",
+            required = true,
+            content = @Content(mediaType = "application/json",
+                    schema = @Schema(type = SchemaType.STRING, example = "{\"sim-config\" : {\"date-ini\":\"\",\"num-orders\": 1000}}")))
+    @APIResponses({
+            @APIResponse(name = "normal", responseCode = "204", description = "orders creating"),
+            @APIResponse(name = "missing 'sim-config'", responseCode = "400",
+                    description = "JSON did not contain setting for 'sim-config'")})
+    public JsonObject getCreateMessage(JsonObject jsonObject) {
+        if (jsonObject == null) {
+            JsonObject entity = JSON.createObjectBuilder()
+                    .add("error", "No sim-config provided")
+                    .build();            
+            Response.status(Response.Status.BAD_REQUEST).entity(entity).build();
+            return entity;
+        }
+        else if (!jsonObject.containsKey("sim-config")) {
+            JsonObject entity = JSON.createObjectBuilder()
+                    .add("error", "No sim-config provided")
+                    .build();            
+            Response.status(Response.Status.BAD_REQUEST).entity(entity).build();
+            return entity;
+        }
+        else if(!jsonObject.getJsonObject("sim-config").containsKey("date-ini")) {
+            JsonObject entity = JSON.createObjectBuilder()
+                    .add("error", "No sim-config -> data-ini provided")
+                    .build();            
+            Response.status(Response.Status.BAD_REQUEST).entity(entity).build();
+            return entity;
+        }
+        else if(!jsonObject.getJsonObject("sim-config").containsKey("num-orders")) {
+            JsonObject entity = JSON.createObjectBuilder()
+                    .add("error", "No sim-config -> num-orders provided")
+                    .build();            
+            Response.status(Response.Status.BAD_REQUEST).entity(entity).build();
+            return entity;
+        }
+        
+        Response.status(Response.Status.NO_CONTENT).build();
+        return createOrder(jsonObject.getJsonObject("sim-config").getString("date-ini"),
+                           jsonObject.getJsonObject("sim-config").getInt("num-orders"));
     }
 
-    private String getDateTimeZFormat(){
-        Calendar cal            = Calendar.getInstance();
-        SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
-        String dateForId        = format.format(cal.getTime());
-        return dateForId;
+    private String getDateTimeZFormat(Date dateCal){
+        SimpleDateFormat formatReturn = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
+        return formatReturn.format(dateCal);
     }
 
-    private JsonObject createOrder() {
+    private String getOrderIdFromDate(Calendar dateCal){
+        StringBuilder strOrderId = new StringBuilder()
+            .append(dateCal.get(Calendar.YEAR))
+            .append((dateCal.get(Calendar.MONTH) + 1) < 10? "0" + (dateCal.get(Calendar.MONTH) + 1) : (dateCal.get(Calendar.MONTH) + 1))
+            .append(dateCal.get(Calendar.DATE)        < 10? "0" + dateCal.get(Calendar.DATE)        : dateCal.get(Calendar.DATE))
+            .append(dateCal.get(Calendar.HOUR)        < 10? "0" + dateCal.get(Calendar.HOUR)        : dateCal.get(Calendar.HOUR))
+            .append(dateCal.get(Calendar.MINUTE)      < 10? "0" + dateCal.get(Calendar.MINUTE)      : dateCal.get(Calendar.MINUTE))
+            .append(dateCal.get(Calendar.SECOND)      < 10? "0" + dateCal.get(Calendar.SECOND)      : dateCal.get(Calendar.SECOND));
+
+        return strOrderId.toString();
+    }
+
+    private String[] getOrderIdAndDateTime (String dateIni, int num) {        
+        String [] strDates         = new String[2];
+        Calendar cal               = Calendar.getInstance();
+        SimpleDateFormat formatIni = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");                
+        Date dateCal               = null;
+
+        try {
+            dateCal = formatIni.parse(dateIni);
+            //set calendar datetime and adds num seconds
+            cal.setTime(dateCal);
+            cal.add(Calendar.SECOND, num);
+            
+            //get DateTime in Z format
+            strDates[0] = getDateTimeZFormat(cal.getTime());
+            //get orderId from cal Date
+            strDates[1] = getOrderIdFromDate(cal); 
+        }
+        catch (ParseException parseEx){
+            System.err.println("ERROR: ParseException - " + parseEx.getMessage());
+        }
+
+        return strDates;
+    }
+
+    private int genNumber(int low, int high){
+        Random r = new Random();
+        return r.nextInt(high-low) + low;
+    }
+
+    private String genPaymentMethod(int typeCard){
+        String cardType = "VISA";
+        switch (typeCard){
+            case 0: cardType  = "AMEX"; break;
+            case 1: cardType  = "MASTERCARD"; break;
+            case 2: cardType  = "VISA"; break;            
+            default: cardType = "CASH"; break;
+        }
+
+        return cardType;
+    }
+
+    private JsonObject createOrder(String date, int numOrders) {
+        String[] strOrderDate = getOrderIdAndDateTime(date, numOrders);
+        int totalPrice        = genNumber(10,20);
+        int originalPrice     = totalPrice + genNumber(0, 2);
+
         JsonObject jsonOBJPaymentBody =  JSON.createObjectBuilder()
-            .add("paymentid", "Test")
-            .add("paymentTime", "Test")
-            .add("orderId", "Test")
-            .add("paymentMethod", "Test")
-            .add("serviceSurvey", "Test")
-            .add("totalPaid", "Test")
-            .add("customerId", "Test")
-            .add("originalPrice", "Test")
+            .add("paymentid", "p" + strOrderDate[1])
+            .add("paymentTime", strOrderDate[0])
+            .add("orderId", strOrderDate[1])
+            .add("paymentMethod", genPaymentMethod(genNumber(0, 4)))
+            .add("serviceSurvey", genNumber(1, 6))
+            .add("totalPaid", totalPrice + "$")
+            .add("customerId", "sim345")
+            .add("originalPrice", originalPrice + "$")
             .build();        
         JsonObject jsonOBJStreetBody = JSON.createObjectBuilder()            
-            .add("name", "Test")
-            .add("long", "Test")
-            .add("lat", "Test")
+            .add("name", "SimStreet")
+            .add("long", "-3.692763")
+            .add("lat", "40.484408")
             .build();
         JsonObject jsonOBJCustomerAddrBody = JSON.createObjectBuilder()            
             .add("street", jsonOBJStreetBody)            
-            .add("number", "Test")
-            .add("door", "Test")
-            .add("email", "Test")
-            .add("citycode", "Test")
-            .add("city", "Test")            
+            .add("number", genNumber(1, 100))
+            .add("door", genNumber(1, 5))
+            .add("email", "ivan.smith@sim-email.es")
+            .add("citycode", genNumber(28001, 28039))
+            .add("city", "Madrid")            
             .build();
         JsonObject jsonOBJPizzaOrderedBody = JSON.createObjectBuilder()                                    
             .add("baseType", "Test")
@@ -197,21 +297,22 @@ public class SimulatorResource {
             .add("topping3", "Test")            
             .build();
         JsonObject jsonOBJCustomerIdBody = JSON.createObjectBuilder()                                    
-            .add("telephone", "Test")
-            .add("email", "Test")                  
+            .add("telephone", genNumber(601000000, 678000000))
+            .add("email", "ivan.smith@sim-email.es")                  
             .build();
         JsonObject jsonOBJCustomerId = JSON.createObjectBuilder()                                    
             .add("customerId", jsonOBJCustomerIdBody)                           
             .build();
 
         JsonObject jsonOBJOrderBody = JSON.createObjectBuilder()
-            .add("dateTimeOrderTaken",getDateTimeZFormat())
-            .add("takenByEmployee","")
+            .add("dateTimeOrderTaken",strOrderDate[0])
+            .add("takenByEmployee","sim001")
             .add("customer",jsonOBJCustomerId)
             .add("pizzaOrdered",jsonOBJPizzaOrderedBody)
-            .add("totalPrice","")
+            .add("totalPrice",totalPrice)
             .add("customerAdress",jsonOBJCustomerAddrBody)
             .add("payment",jsonOBJPaymentBody)
+            .add("orderid",strOrderDate[1])
             .add("status","ORDERED")
             .build();
 
