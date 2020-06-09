@@ -45,31 +45,32 @@ class MainTest {
         Client client = ClientBuilder.newClient();
 
         JsonObject jsonObject = client
-                .target(getConnectionString("/greet"))
+                .target(getConnectionString("/simulator"))
                 .request()
                 .get(JsonObject.class);
+
         Assertions.assertEquals("Hello World!", jsonObject.getString("message"),
                 "default message");
 
         jsonObject = client
-                .target(getConnectionString("/greet/Joe"))
+                .target(getConnectionString("/simulator/Joe"))
                 .request()
                 .get(JsonObject.class);
         Assertions.assertEquals("Hello Joe!", jsonObject.getString("message"),
                 "hello Joe message");
 
         Response r = client
-                .target(getConnectionString("/greet/greeting"))
+                .target(getConnectionString("/simulator/saludos"))
                 .request()
-                .put(Entity.entity("{\"greeting\" : \"Hola\"}", MediaType.APPLICATION_JSON));
+                .put(Entity.entity("{\"greeting\" : \"Holas\"}", MediaType.APPLICATION_JSON));
         Assertions.assertEquals(204, r.getStatus(), "PUT status code");
 
         jsonObject = client
-                .target(getConnectionString("/greet/Jose"))
+                .target(getConnectionString("/simulator/Jose"))
                 .request()
                 .get(JsonObject.class);
-        Assertions.assertEquals("Hola Jose!", jsonObject.getString("message"),
-                "hola Jose message");
+        Assertions.assertEquals("Holas Jose!", jsonObject.getString("message"),
+                "holas Jose message");
 
         r = client
                 .target(getConnectionString("/metrics"))

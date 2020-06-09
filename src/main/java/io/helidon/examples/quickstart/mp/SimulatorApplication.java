@@ -13,37 +13,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.helidon.examples.quickstart.mp;
 
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.Set;
 
 import javax.enterprise.context.ApplicationScoped;
-import javax.inject.Inject;
+import javax.ws.rs.ApplicationPath;
+import javax.ws.rs.core.Application;
 
-import org.eclipse.microprofile.config.inject.ConfigProperty;
+import io.helidon.common.CollectionsHelper;
 
 /**
- * Provider for greeting message.
+ * Simple Application that produces a greeting message.
  */
 @ApplicationScoped
-public class GreetingProvider {
-    private final AtomicReference<String> message = new AtomicReference<>();
+@ApplicationPath("/")
+public class SimulatorApplication extends Application {
 
-    /**
-     * Create a new greeting provider, reading the message from configuration.
-     *
-     * @param message greeting to use
-     */
-    @Inject
-    public GreetingProvider(@ConfigProperty(name = "app.greeting") String message) {
-        this.message.set(message);
-    }
-
-    String getMessage() {
-        return message.get();
-    }
-
-    void setMessage(String message) {
-        this.message.set(message);
+    @Override
+    public Set<Class<?>> getClasses() {
+        return CollectionsHelper.setOf(SimulatorResource.class);
     }
 }

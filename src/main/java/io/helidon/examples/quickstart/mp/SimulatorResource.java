@@ -53,16 +53,16 @@ import org.eclipse.microprofile.openapi.annotations.responses.APIResponses;
  *
  * The message is returned as a JSON object.
  */
-@Path("/greet")
+@Path("/simulator")
 @RequestScoped
-public class GreetResource {
+public class SimulatorResource {
 
     private static final JsonBuilderFactory JSON = Json.createBuilderFactory(Collections.emptyMap());
 
     /**
      * The greeting message provider.
      */
-    private final GreetingProvider greetingProvider;
+    private final SimulatorProvider simulatorProvider;
 
     /**
      * Using constructor injection to get a configuration property.
@@ -71,8 +71,8 @@ public class GreetResource {
      * @param greetingConfig the configured greeting message
      */
     @Inject
-    public GreetResource(GreetingProvider greetingConfig) {
-        this.greetingProvider = greetingConfig;
+    public SimulatorResource(SimulatorProvider simulatorConfig) {
+        this.simulatorProvider = simulatorConfig;
     }
 
     /**
@@ -108,14 +108,14 @@ public class GreetResource {
      * @return {@link Response}
      */
     @SuppressWarnings("checkstyle:designforextension")
-    @Path("/greeting")
+    @Path("/saludos")
     @PUT
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     @RequestBody(name = "greeting",
             required = true,
             content = @Content(mediaType = "application/json",
-                    schema = @Schema(type = SchemaType.STRING, example = "{\"greeting\" : \"Hola\"}")))
+                    schema = @Schema(type = SchemaType.STRING, example = "{\"greeting\" : \"Holas\"}")))
     @APIResponses({
             @APIResponse(name = "normal", responseCode = "204", description = "Greeting updated"),
             @APIResponse(name = "missing 'greeting'", responseCode = "400",
@@ -131,15 +131,67 @@ public class GreetResource {
 
         String newGreeting = jsonObject.getString("greeting");
 
-        greetingProvider.setMessage(newGreeting);
+        simulatorProvider.setMessage(newGreeting);
         return Response.status(Response.Status.NO_CONTENT).build();
     }
 
     private JsonObject createResponse(String who) {
-        String msg = String.format("%s %s!", greetingProvider.getMessage(), who);
+        String msg = String.format("%s %s!", simulatorProvider.getMessage(), who);
 
         return JSON.createObjectBuilder()
                 .add("message", msg)
                 .build();
     }
+
+
+    private JsonObject createOrder() {
+        JsonObject jsonOBJPaymentBody =  JSON.createObjectBuilder()
+            .add("paymentid", "Test")
+            .add("paymentTime", "Test")
+            .add("orderId", "Test")
+            .add("paymentMethod", "Test")
+            .add("serviceSurvey", "Test")
+            .add("totalPaid", "Test")
+            .add("customerId", "Test")
+            .add("originalPrice", "Test")
+            .build();
+        JsonObject jsonOBJPayment =  JSON.createObjectBuilder()
+            .add("payment",jsonOBJPaymentBody)
+            .build();
+        JsonObject jsonOBJStreetBody = JSON.createObjectBuilder()            
+            .add("name", "Test")
+            .add("long", "Test")
+            .add("lat", "Test")
+            .build();
+        JsonObject jsonOBJCustomerAddrBody = JSON.createObjectBuilder()            
+            .add("street", jsonOBJStreetBody)            
+            .add("number", "Test")
+            .add("door", "Test")
+            .add("email", "Test")
+            .add("citycode", "Test")
+            .add("city", "Test")            
+            .build();
+        JsonObject jsonOBJPizzaOrderedBody = JSON.createObjectBuilder()                                    
+            .add("baseType", "Test")
+            .add("topping1", "Test")
+            .add("topping2", "Test")
+            .add("topping3", "Test")            
+            .build();
+        JsonObject jsonOBJCustomerIdBody = JSON.createObjectBuilder()                                    
+            .add("telephone", "Test")
+            .add("email", "Test")                  
+            .build();
+        JsonObject jsonOBJCustomerId = JSON.createObjectBuilder()                                    
+            .add("customerId", jsonOBJCustomerId)                           
+            .build();
+
+        JsonObject jsonOBJOrderBody = JSON.createObjectBuilder()
+            .add("dateTimeOrderTaken","")
+            .add("takenByEmployee","")
+            .add("customer",jsonOBJCustomerId)
+            .build();
+
+        return jsonOBJOrderBody.
+    }
+
 }

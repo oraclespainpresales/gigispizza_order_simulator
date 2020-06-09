@@ -12,6 +12,8 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ * 
+ * Developed by: Iván Sampedro - ivan.sampedro@oracle.com
  */
 
 package io.helidon.examples.quickstart.mp;
@@ -45,7 +47,7 @@ public final class Main {
         // start the server
         Server server = startServer();
 
-        System.out.println("http://localhost:" + server.port() + "/greet");
+        System.out.println("http://localhost:" + server.port() + "/simulator");
     }
 
     /**
