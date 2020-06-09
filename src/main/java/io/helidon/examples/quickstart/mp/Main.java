@@ -47,7 +47,7 @@ public final class Main {
         // start the server
         Server server = startServer();
 
-        System.out.println("http://localhost:" + server.port() + "/simulator");
+        System.out.println("Server started at: http://localhost:" + server.port() + "/simulator");
     }
 
     /**

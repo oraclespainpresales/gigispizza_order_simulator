@@ -20,9 +20,11 @@ import java.util.Date;
 import java.util.Random;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
-//import java.util.logging.Logger;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import javax.enterprise.context.RequestScoped;
 import javax.inject.Inject;
@@ -46,8 +48,6 @@ import org.eclipse.microprofile.openapi.annotations.parameters.RequestBody;
 import org.eclipse.microprofile.openapi.annotations.responses.APIResponse;
 import org.eclipse.microprofile.openapi.annotations.responses.APIResponses;
 
-import javassist.bytecode.analysis.Type;
-
 /**
  * A simple JAX-RS resource to greet you. Examples:
  *
@@ -65,7 +65,7 @@ import javassist.bytecode.analysis.Type;
 @Path("/simulator")
 @RequestScoped
 public class SimulatorResource {
-    //private final static Logger LOGGER = Logger.getLogger(SimulatorResource.class.getName());
+    private final static Logger LOGGER           = Logger.getLogger(SimulatorResource.class.getName());
     private static final JsonBuilderFactory JSON = Json.createBuilderFactory(Collections.emptyMap());
 
     /**
@@ -239,7 +239,7 @@ public class SimulatorResource {
             strDates[1] = getOrderIdFromDate(cal); 
         }
         catch (ParseException parseEx){
-            System.err.println("ERROR: ParseException - " + parseEx.getMessage());
+            LOGGER.log(Level.SEVERE,"ERROR: ParseException - " + parseEx.getMessage());
         }
 
         return strDates;
@@ -262,8 +262,49 @@ public class SimulatorResource {
         return cardType;
     }
 
+    private String genBasePizza(){
+        String [] size = {"Small",
+                          "Medium",
+                          "Large",
+                          "X-Large"};
+        String [] base = {"BACON SPINACH ALFREDO",
+                          "CHEESE BASIC",
+                          "HAWAIIAN CHICKEN",
+                          "MEAT LOVER",
+                          "PEPPERONI",
+                          "PREMIUM GARDEN VEGGIE",
+                          "SUPPREME",
+                          "ULTIMATE CHEESE LOVER"};
+
+        return size[genNumber(0, size.length)] + " " + base[genNumber(0, base.length)];
+    }
+
+    private String[] genToppings(){
+        String [] toppings = {"Tuna","Onions","BBQ Sauce","Tomatos","Mushrooms"};
+        int index          = 0;
+        int [] selected    = {0,0,0};
+        ArrayList<Integer> selectables = new ArrayList<Integer>(5);
+        selectables.add(0);
+        selectables.add(1);
+        selectables.add(2);
+        selectables.add(3);
+        selectables.add(4);
+
+        //LOGGER.info("INFO:: " + selectables.toString());
+        for (int i=0;i < 3;i++){
+            index = genNumber(0, selectables.size());
+            //LOGGER.info("INFO:: " + index);
+            selected [i] = selectables.get(index);            
+            selectables.remove(index);
+            //LOGGER.info("INFO:: " + selectables.toString());
+        }
+
+        return new String [] {toppings[selected[0]],toppings[selected[1]],toppings[selected[2]]};
+    }
+
     private JsonObject createOrder(String date, int numOrders) {
         String[] strOrderDate = getOrderIdAndDateTime(date, numOrders);
+        String[] strToppings  = genToppings();
         int totalPrice        = genNumber(10,20);
         int originalPrice     = totalPrice + genNumber(0, 2);
 
@@ -291,10 +332,10 @@ public class SimulatorResource {
             .add("city", "Madrid")            
             .build();
         JsonObject jsonOBJPizzaOrderedBody = JSON.createObjectBuilder()                                    
-            .add("baseType", "Test")
-            .add("topping1", "Test")
-            .add("topping2", "Test")
-            .add("topping3", "Test")            
+            .add("baseType", genBasePizza())
+            .add("topping1", strToppings[0])
+            .add("topping2", strToppings[1])
+            .add("topping3", strToppings[2])            
             .build();
         JsonObject jsonOBJCustomerIdBody = JSON.createObjectBuilder()                                    
             .add("telephone", genNumber(601000000, 678000000))
