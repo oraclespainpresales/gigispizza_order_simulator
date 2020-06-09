@@ -16,7 +16,10 @@
 
 package io.helidon.examples.quickstart.mp;
 
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
 import java.util.Collections;
+import java.util.Locale;
 
 import javax.enterprise.context.RequestScoped;
 import javax.inject.Inject;
@@ -25,6 +28,7 @@ import javax.json.JsonBuilderFactory;
 import javax.json.JsonObject;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
+import javax.ws.rs.POST;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
@@ -143,6 +147,24 @@ public class SimulatorResource {
                 .build();
     }
 
+    /**
+     * Return a wordly greeting message.
+     *
+     * @return {@link JsonObject}
+     */
+    @SuppressWarnings("checkstyle:designforextension")
+    @POST
+    @Produces(MediaType.APPLICATION_JSON)
+    public JsonObject getCreateMessage() {
+        return createOrder();
+    }
+
+    private String getDateTimeZFormat(){
+        Calendar cal            = Calendar.getInstance();
+        SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
+        String dateForId        = format.format(cal.getTime());
+        return dateForId;
+    }
 
     private JsonObject createOrder() {
         JsonObject jsonOBJPaymentBody =  JSON.createObjectBuilder()
@@ -154,10 +176,7 @@ public class SimulatorResource {
             .add("totalPaid", "Test")
             .add("customerId", "Test")
             .add("originalPrice", "Test")
-            .build();
-        JsonObject jsonOBJPayment =  JSON.createObjectBuilder()
-            .add("payment",jsonOBJPaymentBody)
-            .build();
+            .build();        
         JsonObject jsonOBJStreetBody = JSON.createObjectBuilder()            
             .add("name", "Test")
             .add("long", "Test")
@@ -182,16 +201,21 @@ public class SimulatorResource {
             .add("email", "Test")                  
             .build();
         JsonObject jsonOBJCustomerId = JSON.createObjectBuilder()                                    
-            .add("customerId", jsonOBJCustomerId)                           
+            .add("customerId", jsonOBJCustomerIdBody)                           
             .build();
 
         JsonObject jsonOBJOrderBody = JSON.createObjectBuilder()
-            .add("dateTimeOrderTaken","")
+            .add("dateTimeOrderTaken",getDateTimeZFormat())
             .add("takenByEmployee","")
             .add("customer",jsonOBJCustomerId)
+            .add("pizzaOrdered",jsonOBJPizzaOrderedBody)
+            .add("totalPrice","")
+            .add("customerAdress",jsonOBJCustomerAddrBody)
+            .add("payment",jsonOBJPaymentBody)
+            .add("status","ORDERED")
             .build();
 
-        return jsonOBJOrderBody.
+        return JSON.createObjectBuilder().add("order",jsonOBJOrderBody).build();
     }
 
 }

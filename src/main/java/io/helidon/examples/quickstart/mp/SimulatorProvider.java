@@ -35,7 +35,7 @@ public class SimulatorProvider {
      * @param message greeting to use
      */
     @Inject
-    public SimulatorProvider(@ConfigProperty(name = "app.greeting") String message) {
+    public SimulatorProvider(@ConfigProperty(name = "app.greeting") final String message) {
         this.message.set(message);
     }
 
@@ -43,7 +43,11 @@ public class SimulatorProvider {
         return message.get();
     }
 
-    void setMessage(String message) {
+    String getCreateMessage() {
+        return message.get();
+    }
+
+    void setMessage(final String message) {
         this.message.set(message);
     }
 }
