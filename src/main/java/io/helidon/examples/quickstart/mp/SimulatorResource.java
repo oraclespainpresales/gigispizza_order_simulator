@@ -18,6 +18,7 @@ package io.helidon.examples.quickstart.mp;
 
 import java.util.Date;
 import java.util.Random;
+import java.net.URI;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -29,6 +30,7 @@ import java.util.logging.Logger;
 import javax.enterprise.context.RequestScoped;
 import javax.inject.Inject;
 import javax.json.Json;
+import javax.json.JsonArray;
 import javax.json.JsonBuilderFactory;
 import javax.json.JsonObject;
 import javax.ws.rs.Consumes;
@@ -47,6 +49,9 @@ import org.eclipse.microprofile.openapi.annotations.media.Schema;
 import org.eclipse.microprofile.openapi.annotations.parameters.RequestBody;
 import org.eclipse.microprofile.openapi.annotations.responses.APIResponse;
 import org.eclipse.microprofile.openapi.annotations.responses.APIResponses;
+//import org.eclipse.microprofile.rest.client.inject.RestClient;
+import org.eclipse.microprofile.rest.client.RestClientBuilder;
+import org.eclipse.microprofile.rest.client.inject.RestClient;
 
 /**
  * A simple JAX-RS resource to greet you. Examples:
@@ -83,6 +88,22 @@ public class SimulatorResource {
     public SimulatorResource(SimulatorProvider simulatorConfig) {
         this.simulatorProvider = simulatorConfig;
     }
+
+    /**
+     * Using constructor injection to get a RestClient creation (Interface OrderService.java).
+     * By default this gets the value from META-INF/microprofile-config
+     *
+     * @param mp-rest/url the configured url to microservice orchestrator
+     * @param mp-rest/connectTimeout connection timeout 
+     * @param mp-rest/responseTimeout response timeout 
+     * 
+     * Alternative to Inject::: OrderService os = RestClientBuilder.newBuilder()
+     *                              .baseUri(URI.create("https://madrid-gigispizza.wedoteam.io"))
+     *                              .build(OrderService.class);
+     */
+    @Inject
+	@RestClient
+	private OrderService msOrchestrator;
 
     /**
      * Return a wordly greeting message.
@@ -161,47 +182,58 @@ public class SimulatorResource {
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    @RequestBody(name = "sim-config",
-            required = true,
-            content = @Content(mediaType = "application/json",
-                    schema = @Schema(type = SchemaType.STRING, example = "{\"sim-config\" : {\"date-ini\":\"\",\"num-orders\": 1000}}")))
+    @RequestBody(name     = "sim-config",
+                 required = true,
+                 content  = @Content(mediaType = "application/json",
+                 schema   = @Schema(type = SchemaType.STRING, 
+                 example  = "{\"sim-config\" : {\"date-ini\":\"\",\"num-orders\": 10,\"pizza-status\":\"ORDERED\"}}")))
     @APIResponses({
             @APIResponse(name = "normal", responseCode = "204", description = "orders creating"),
-            @APIResponse(name = "missing 'sim-config'", responseCode = "400",
-                    description = "JSON did not contain setting for 'sim-config'")})
-    public JsonObject getCreateMessage(JsonObject jsonObject) {
-        if (jsonObject == null) {
-            JsonObject entity = JSON.createObjectBuilder()
-                    .add("error", "No sim-config provided")
-                    .build();            
-            Response.status(Response.Status.BAD_REQUEST).entity(entity).build();
-            return entity;
+            @APIResponse(name = "missing 'sim-config'", responseCode = "400", description = "JSON did not contain setting for 'sim-config'")})
+    public Response getCreateMessage(JsonObject jsonObject) {
+        try {
+            if (jsonObject == null) {
+                JsonObject entity = JSON.createObjectBuilder()
+                        .add("error", "No sim-config provided")
+                        .build();       
+                return Response.status(Response.Status.BAD_REQUEST).entity(entity).build();
+            }        
+            else if (!jsonObject.containsKey("sim-config")) {
+                JsonObject entity = JSON.createObjectBuilder()
+                        .add("error", "No sim-config provided")
+                        .build();            
+                return Response.status(Response.Status.BAD_REQUEST).entity(entity).build();
+            }
+            else if(!jsonObject.getJsonObject("sim-config").containsKey("date-ini")) {
+                JsonObject entity = JSON.createObjectBuilder()
+                        .add("error", "No sim-config -> data-ini provided")
+                        .build();            
+                return Response.status(Response.Status.BAD_REQUEST).entity(entity).build();
+            }
+            else if(!jsonObject.getJsonObject("sim-config").containsKey("num-orders")) {
+                JsonObject entity = JSON.createObjectBuilder()
+                        .add("error", "No sim-config -> num-orders provided")
+                        .build();            
+                return Response.status(Response.Status.BAD_REQUEST).entity(entity).build();
+            }
+            else if(!jsonObject.getJsonObject("sim-config").containsKey("pizza-status")) {
+                JsonObject entity = JSON.createObjectBuilder()
+                        .add("error", "No sim-config -> pizza-status provided")
+                        .build();            
+                return Response.status(Response.Status.BAD_REQUEST).entity(entity).build();
+            }
+            
+            return createOrders(jsonObject.getJsonObject("sim-config").getString("date-ini"),
+                                jsonObject.getJsonObject("sim-config").getInt("num-orders"),
+                                jsonObject.getJsonObject("sim-config").getString("pizza-status"));
+                   
         }
-        else if (!jsonObject.containsKey("sim-config")) {
+        catch(Exception ex){
             JsonObject entity = JSON.createObjectBuilder()
-                    .add("error", "No sim-config provided")
-                    .build();            
-            Response.status(Response.Status.BAD_REQUEST).entity(entity).build();
-            return entity;
+                        .add("error", "problem with json config")
+                        .build();            
+            return Response.status(Response.Status.BAD_REQUEST).entity(entity).build();
         }
-        else if(!jsonObject.getJsonObject("sim-config").containsKey("date-ini")) {
-            JsonObject entity = JSON.createObjectBuilder()
-                    .add("error", "No sim-config -> data-ini provided")
-                    .build();            
-            Response.status(Response.Status.BAD_REQUEST).entity(entity).build();
-            return entity;
-        }
-        else if(!jsonObject.getJsonObject("sim-config").containsKey("num-orders")) {
-            JsonObject entity = JSON.createObjectBuilder()
-                    .add("error", "No sim-config -> num-orders provided")
-                    .build();            
-            Response.status(Response.Status.BAD_REQUEST).entity(entity).build();
-            return entity;
-        }
-        
-        Response.status(Response.Status.NO_CONTENT).build();
-        return createOrder(jsonObject.getJsonObject("sim-config").getString("date-ini"),
-                           jsonObject.getJsonObject("sim-config").getInt("num-orders"));
     }
 
     private String getDateTimeZFormat(Date dateCal){
@@ -302,7 +334,36 @@ public class SimulatorResource {
         return new String [] {toppings[selected[0]],toppings[selected[1]],toppings[selected[2]]};
     }
 
-    private JsonObject createOrder(String date, int numOrders) {
+    
+
+    private Response createOrders (String date, int numOrders, String pizzaStatus) {
+        Response resp;
+        try {
+            //resp = Response.status(Response.Status.ACCEPTED)
+            //            .entity(createOrder(date,numOrders,pizzaStatus))
+            //            .build();
+            LOGGER.info(msOrchestrator.version().toString());
+            JsonObject order = createOrder(date,numOrders,pizzaStatus);
+            LOGGER.info("order: " + order);
+            JsonObject entity = msOrchestrator.createOrder(order);
+            //LOGGER.info("orderreturn: " + msOrchestrator.createOrder().toString());
+            resp = Response.status(Response.Status.ACCEPTED)
+                        .entity(entity)
+                        .build();
+        }
+        catch (Exception ex){
+            JsonObject entity = JSON.createObjectBuilder()
+                    .add("error", "problem with order creation")
+                    .build();   
+            LOGGER.log(Level.SEVERE,"ERROR createOrders: " + ex.getMessage());
+            ex.printStackTrace();
+            resp = Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(entity).build();
+        }
+
+        return resp;
+    }
+
+    private JsonObject createOrder(String date, int numOrders, String pizzaStatus) throws Exception{
         String[] strOrderDate = getOrderIdAndDateTime(date, numOrders);
         String[] strToppings  = genToppings();
         int totalPrice        = genNumber(10,20);
@@ -314,9 +375,9 @@ public class SimulatorResource {
             .add("orderId", strOrderDate[1])
             .add("paymentMethod", genPaymentMethod(genNumber(0, 4)))
             .add("serviceSurvey", genNumber(1, 6))
-            .add("totalPaid", totalPrice + "$")
+            .add("totalPaid", totalPrice)
             .add("customerId", "sim345")
-            .add("originalPrice", originalPrice + "$")
+            .add("originalPrice", originalPrice)
             .build();        
         JsonObject jsonOBJStreetBody = JSON.createObjectBuilder()            
             .add("name", "SimStreet")
@@ -344,20 +405,20 @@ public class SimulatorResource {
         JsonObject jsonOBJCustomerId = JSON.createObjectBuilder()                                    
             .add("customerId", jsonOBJCustomerIdBody)                           
             .build();
-
         JsonObject jsonOBJOrderBody = JSON.createObjectBuilder()
             .add("dateTimeOrderTaken",strOrderDate[0])
             .add("takenByEmployee","sim001")
             .add("customer",jsonOBJCustomerId)
             .add("pizzaOrdered",jsonOBJPizzaOrderedBody)
-            .add("totalPrice",totalPrice)
-            .add("customerAdress",jsonOBJCustomerAddrBody)
-            .add("payment",jsonOBJPaymentBody)
-            .add("orderid",strOrderDate[1])
-            .add("status","ORDERED")
+            .add("totalPrice",totalPrice + "$")
+            .add("customerAdress",jsonOBJCustomerAddrBody)                    
             .build();
-
-        return JSON.createObjectBuilder().add("order",jsonOBJOrderBody).build();
+        
+        return JSON.createObjectBuilder()
+                   .add("order",jsonOBJOrderBody)
+                   .add("payment",jsonOBJPaymentBody)
+                   .add("status",pizzaStatus)
+                   .build();
     }
 
 }

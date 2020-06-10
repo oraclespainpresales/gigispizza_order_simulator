@@ -37,6 +37,11 @@
 
     <dependencies>
         <dependency>
+            <groupId>io.helidon.microprofile.rest-client</groupId>
+            <artifactId>helidon-microprofile-rest-client</artifactId>
+            <version>${helidon.version}</version>
+        </dependency>        
+        <dependency>
             <groupId>io.helidon.microprofile.bundles</groupId>
             <artifactId>helidon-microprofile</artifactId>
         </dependency>
