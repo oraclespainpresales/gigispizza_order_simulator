@@ -42,47 +42,21 @@ class MainTest {
     @Test
     void testHelloWorld() {
 
-        Client client = ClientBuilder.newClient();
-
-        JsonObject jsonObject = client
-                .target(getConnectionString("/simulator"))
-                .request()
-                .get(JsonObject.class);
-
-        Assertions.assertEquals("Hello World!", jsonObject.getString("message"),
-                "default message");
-
-        jsonObject = client
-                .target(getConnectionString("/simulator/Joe"))
-                .request()
-                .get(JsonObject.class);
-        Assertions.assertEquals("Hello Joe!", jsonObject.getString("message"),
-                "hello Joe message");
-
-        Response r = client
-                .target(getConnectionString("/simulator/saludos"))
-                .request()
-                .put(Entity.entity("{\"greeting\" : \"Holas\"}", MediaType.APPLICATION_JSON));
-        Assertions.assertEquals(204, r.getStatus(), "PUT status code");
-
-        jsonObject = client
-                .target(getConnectionString("/simulator/Jose"))
-                .request()
-                .get(JsonObject.class);
-        Assertions.assertEquals("Holas Jose!", jsonObject.getString("message"),
-                "holas Jose message");
-
-        r = client
+        Client client         = ClientBuilder.newClient();
+        JsonObject jsonObject = null;        
+        Response resp         = null;
+        
+        resp = client
                 .target(getConnectionString("/metrics"))
                 .request()
                 .get();
-        Assertions.assertEquals(200, r.getStatus(), "GET metrics status code");
+        Assertions.assertEquals(200, resp.getStatus(), "GET metrics status code");
 
-        r = client
+        resp = client
                 .target(getConnectionString("/health"))
                 .request()
                 .get();
-        Assertions.assertEquals(200, r.getStatus(), "GET health status code");
+        Assertions.assertEquals(200, resp.getStatus(), "GET health status code");
     }
 
     @AfterAll

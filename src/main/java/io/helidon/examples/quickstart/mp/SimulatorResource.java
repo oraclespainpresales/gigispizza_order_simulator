@@ -18,6 +18,7 @@ package io.helidon.examples.quickstart.mp;
 
 import java.util.Date;
 import java.util.Random;
+import java.util.concurrent.TimeUnit;
 import java.net.URI;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -30,7 +31,6 @@ import java.util.logging.Logger;
 import javax.enterprise.context.RequestScoped;
 import javax.inject.Inject;
 import javax.json.Json;
-import javax.json.JsonArray;
 import javax.json.JsonBuilderFactory;
 import javax.json.JsonObject;
 import javax.ws.rs.Consumes;
@@ -49,9 +49,7 @@ import org.eclipse.microprofile.openapi.annotations.media.Schema;
 import org.eclipse.microprofile.openapi.annotations.parameters.RequestBody;
 import org.eclipse.microprofile.openapi.annotations.responses.APIResponse;
 import org.eclipse.microprofile.openapi.annotations.responses.APIResponses;
-//import org.eclipse.microprofile.rest.client.inject.RestClient;
 import org.eclipse.microprofile.rest.client.RestClientBuilder;
-import org.eclipse.microprofile.rest.client.inject.RestClient;
 
 /**
  * A simple JAX-RS resource to greet you. Examples:
@@ -70,8 +68,16 @@ import org.eclipse.microprofile.rest.client.inject.RestClient;
 @Path("/simulator")
 @RequestScoped
 public class SimulatorResource {
-    private final static Logger LOGGER           = Logger.getLogger(SimulatorResource.class.getName());
+    private static final Logger LOGGER           = Logger.getLogger(SimulatorResource.class.getName());
     private static final JsonBuilderFactory JSON = Json.createBuilderFactory(Collections.emptyMap());
+    private boolean databaseMode = false;
+    private String databaseURL   = "";
+    private String databaseUser  = "";
+    private String databasePass  = "";
+
+    private String msBaseURL = "";
+    private int msConTimeOut = 5000;
+    private int msResTimeOut = 5000;
 
     /**
      * The greeting message provider.
@@ -97,14 +103,15 @@ public class SimulatorResource {
      * @param mp-rest/connectTimeout connection timeout 
      * @param mp-rest/responseTimeout response timeout 
      * 
-     * Alternative to Inject::: OrderService os = RestClientBuilder.newBuilder()
+     * Alternative to Inject and configurable dinamically:
+     * OrderService os = RestClientBuilder.newBuilder()
      *                              .baseUri(URI.create("https://madrid-gigispizza.wedoteam.io"))
      *                              .build(OrderService.class);
      */
-    @Inject
-	@RestClient
-	private OrderService msOrchestrator;
-
+    //@Inject
+	//@RestClient
+    private OrderService msOrchestrator;
+    
     /**
      * Return a wordly greeting message.
      *
@@ -113,7 +120,7 @@ public class SimulatorResource {
     @SuppressWarnings("checkstyle:designforextension")
     @GET
     @Produces(MediaType.APPLICATION_JSON)
-    public JsonObject getDefaultMessage() {
+    public JsonObject getDefaultMessage() {        
         return createResponse("World");
     }
 
@@ -173,6 +180,76 @@ public class SimulatorResource {
                 .build();
     }
 
+    private JsonObject setDataBaseMode (JsonObject dataBaseObj){
+        JsonObject entity = null;
+        if(!dataBaseObj.containsKey("connection-string")) {
+            entity = JSON.createObjectBuilder()
+                    .add("error", "No sim-config -> database -> connection-string provided")
+                    .build();            
+        }
+        else if(!dataBaseObj.containsKey("database-user")) {
+            entity = JSON.createObjectBuilder()
+                    .add("error", "No sim-config -> database -> database-user provided")
+                    .build();            
+        }
+        else if(!dataBaseObj.containsKey("database-password")) {
+            entity = JSON.createObjectBuilder()
+                    .add("error", "No sim-config -> database -> database-password provided")
+                    .build();            
+        }
+        databaseMode = true;
+        databaseURL  = dataBaseObj.getString("connection-string");
+        databaseUser = dataBaseObj.getString("database-user");
+        databasePass = dataBaseObj.getString("database-password");
+
+        LOGGER.info ("DATA-BASE MODE ON");
+        LOGGER.info ("DATA-BASE connection-string: " + databaseURL);
+        LOGGER.info ("DATA-BASE database-user    : " + databaseUser);
+        LOGGER.info ("DATA-BASE database-password: " + databasePass);
+
+        return entity;
+    }
+
+    private JsonObject setMicroserviceMode (JsonObject jsonMsObj){
+        JsonObject entity = null;
+        if(!jsonMsObj.containsKey("url")) {
+            entity = JSON.createObjectBuilder()
+                    .add("error", "No sim-config -> microservice -> url provided")
+                    .build();            
+        }
+        else if(!jsonMsObj.containsKey("connection-timeout")) {
+            entity = JSON.createObjectBuilder()
+                    .add("error", "No sim-config -> microservice -> connection-timeout provided")
+                    .build();            
+        }
+        else if(!jsonMsObj.containsKey("response-timeout")) {
+            entity = JSON.createObjectBuilder()
+                    .add("error", "No sim-config -> microservice -> response-timeout provided")
+                    .build();            
+        }
+        else{
+            try {
+                databaseMode = false;
+                msBaseURL    = jsonMsObj.getString("url");
+                msConTimeOut = jsonMsObj.getInt("connection-timeout");
+                msResTimeOut = jsonMsObj.getInt("response-timeout");
+        
+                LOGGER.info ("MICROSERVICE MODE ON");
+                LOGGER.info ("MICROSERVICE url                    : " + msBaseURL);
+                LOGGER.info ("MICROSERVICE connection-timeout (ms): " + msConTimeOut);
+                LOGGER.info ("MICROSERVICE response-timeout (ms)  : " + msResTimeOut);
+            }
+            catch (Exception ex){
+                LOGGER.log(Level.SEVERE,ex.getMessage());
+                ex.printStackTrace();
+                entity = JSON.createObjectBuilder()
+                        .add("error", ex.getMessage())
+                        .build(); 
+            }        
+        }
+        return entity;
+    }
+
     /**
      * Return a wordly greeting message.
      *
@@ -222,6 +299,34 @@ public class SimulatorResource {
                         .build();            
                 return Response.status(Response.Status.BAD_REQUEST).entity(entity).build();
             }
+            else if(!jsonObject.getJsonObject("sim-config").containsKey("database")
+                 && !jsonObject.getJsonObject("sim-config").containsKey("microservice")) {
+                JsonObject entity = JSON.createObjectBuilder()
+                        .add("error", "No sim-config -> database or microservice connection provided")
+                        .build();            
+                return Response.status(Response.Status.BAD_REQUEST).entity(entity).build();
+            }
+            else if(jsonObject.getJsonObject("sim-config").containsKey("database")) {
+                JsonObject dataBaseObj = jsonObject.getJsonObject("sim-config").getJsonObject("database");
+                JsonObject entity      = setDataBaseMode(dataBaseObj);
+                if (entity != null)
+                    return Response.status(Response.Status.BAD_REQUEST).entity(entity).build();
+            }
+            else if(!databaseMode && jsonObject.getJsonObject("sim-config").containsKey("microservice")) {
+                JsonObject jsonMsObj = jsonObject.getJsonObject("sim-config").getJsonObject("microservice");
+                JsonObject entity    = setMicroserviceMode(jsonMsObj);
+                if (entity != null)
+                    return Response.status(Response.Status.BAD_REQUEST).entity(entity).build();
+                else{
+                    msOrchestrator = RestClientBuilder.newBuilder()
+                                    .baseUri(URI.create(msBaseURL))
+                                    .connectTimeout(msConTimeOut, TimeUnit.MILLISECONDS)
+                                    .readTimeout(msResTimeOut, TimeUnit.MILLISECONDS)                                    
+                                    .build(OrderService.class);
+                    
+                }
+
+            }
             
             return createOrders(jsonObject.getJsonObject("sim-config").getString("date-ini"),
                                 jsonObject.getJsonObject("sim-config").getInt("num-orders"),
@@ -229,6 +334,7 @@ public class SimulatorResource {
                    
         }
         catch(Exception ex){
+            ex.printStackTrace();
             JsonObject entity = JSON.createObjectBuilder()
                         .add("error", "problem with json config")
                         .build();            
@@ -333,8 +439,6 @@ public class SimulatorResource {
 
         return new String [] {toppings[selected[0]],toppings[selected[1]],toppings[selected[2]]};
     }
-
-    
 
     private Response createOrders (String date, int numOrders, String pizzaStatus) {
         Response resp;

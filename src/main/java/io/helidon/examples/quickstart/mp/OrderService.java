@@ -13,8 +13,9 @@ import javax.ws.rs.core.MediaType;
 
 import org.eclipse.microprofile.rest.client.inject.RegisterRestClient;
 
-@RegisterRestClient(configKey = "microservice-Orchestrator")
 @ApplicationScoped
+@RegisterRestClient(configKey = "microservice-Orchestrator")
+
 public interface OrderService {
     @GET
     @Path("/version")
