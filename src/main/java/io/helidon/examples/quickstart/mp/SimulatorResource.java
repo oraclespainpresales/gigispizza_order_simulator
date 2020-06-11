@@ -70,17 +70,8 @@ import org.eclipse.microprofile.rest.client.RestClientBuilder;
 public class SimulatorResource {
     private static final Logger LOGGER           = Logger.getLogger(SimulatorResource.class.getName());
     private static final JsonBuilderFactory JSON = Json.createBuilderFactory(Collections.emptyMap());
-    private boolean databaseMode = false;
-    private String databaseURL   = "";
-    private String databaseUser  = "";
-    private String databasePass  = "";
-    private String databaseDate  = "";
-    private String databaseDtFm  = "dd/MM/yyyy HH:mm:ss";
-
-    private String msBaseURL = "";
-    private int msConTimeOut = 5000;
-    private int msResTimeOut = 5000;
-
+    private boolean databaseMode = false;    
+    
     /**
      * The greeting message provider.
      */
@@ -194,6 +185,11 @@ public class SimulatorResource {
                     .add("error", "No sim-config -> database -> date-format provided")
                     .build();            
         }
+        else if(!dataBaseObj.containsKey(("pizza-status"))) {
+            entity = JSON.createObjectBuilder()
+                    .add("error", "No sim-config -> database -> pizza-status provided")
+                    .build();            
+        }
         else if(!dataBaseObj.containsKey("connection-string")) {
             entity = JSON.createObjectBuilder()
                     .add("error", "No sim-config -> database -> connection-string provided")
@@ -211,18 +207,14 @@ public class SimulatorResource {
         }
         else {
             databaseMode = true;
-            databaseDate = dataBaseObj.getString("date-ini");
-            databaseDtFm = dataBaseObj.getString("date-format");
-            databaseURL  = dataBaseObj.getString("connection-string");
-            databaseUser = dataBaseObj.getString("database-user");
-            databasePass = dataBaseObj.getString("database-password");
 
             LOGGER.info ("DATA-BASE MODE ON");
-            LOGGER.info ("DATA-BASE date-format      : " + databaseDtFm);
-            LOGGER.info ("DATA-BASE date-ini         : " + databaseDate);        
-            LOGGER.info ("DATA-BASE connection-string: " + databaseURL);
-            LOGGER.info ("DATA-BASE database-user    : " + databaseUser);
-            LOGGER.info ("DATA-BASE database-password: " + databasePass);
+            LOGGER.info ("DATA-BASE date-format      : " + dataBaseObj.getString("date-format"));
+            LOGGER.info ("DATA-BASE date-ini         : " + dataBaseObj.getString("date-ini"));        
+            LOGGER.info ("DATA-BASE pizza-status     : " + dataBaseObj.getString("pizza-status"));        
+            LOGGER.info ("DATA-BASE connection-string: " + dataBaseObj.getString("connection-string"));
+            LOGGER.info ("DATA-BASE database-user    : " + dataBaseObj.getString("database-user"));
+            LOGGER.info ("DATA-BASE database-password: " + dataBaseObj.getString("database-password"));
         }
 
         return entity;
@@ -247,14 +239,11 @@ public class SimulatorResource {
         }
         else{
             databaseMode = false;
-            msBaseURL    = jsonMsObj.getString("url");
-            msConTimeOut = jsonMsObj.getInt("connection-timeout");
-            msResTimeOut = jsonMsObj.getInt("response-timeout");
-    
+            
             LOGGER.info ("MICROSERVICE MODE ON");
-            LOGGER.info ("MICROSERVICE url                    : " + msBaseURL);
-            LOGGER.info ("MICROSERVICE connection-timeout (ms): " + msConTimeOut);
-            LOGGER.info ("MICROSERVICE response-timeout (ms)  : " + msResTimeOut);
+            LOGGER.info ("MICROSERVICE url                    : " + jsonMsObj.getString("url"));
+            LOGGER.info ("MICROSERVICE connection-timeout (ms): " + jsonMsObj.getInt("connection-timeout"));
+            LOGGER.info ("MICROSERVICE response-timeout (ms)  : " + jsonMsObj.getInt("response-timeout"));
         }
         return entity;
     }
@@ -296,13 +285,7 @@ public class SimulatorResource {
                         .add("error", "No sim-config -> num-orders provided")
                         .build();            
                 resp = Response.status(Response.Status.BAD_REQUEST).entity(entity).build();
-            }
-            else if(!jsonObject.getJsonObject("sim-config").containsKey("pizza-status")) {
-                JsonObject entity = JSON.createObjectBuilder()
-                        .add("error", "No sim-config -> pizza-status provided")
-                        .build();            
-                resp = Response.status(Response.Status.BAD_REQUEST).entity(entity).build();
-            }
+            }            
             else if(!jsonObject.getJsonObject("sim-config").containsKey("database")
                  && !jsonObject.getJsonObject("sim-config").containsKey("microservice")) {
                 JsonObject entity = JSON.createObjectBuilder()
@@ -316,9 +299,10 @@ public class SimulatorResource {
                 if (entity != null)
                     resp = Response.status(Response.Status.BAD_REQUEST).entity(entity).build();
                 else
-                    resp = createOrders(dataBaseObj.getString("date-ini"),
+                    resp = createOrders(dataBaseObj.getString("date-format"),
+                                        dataBaseObj.getString("date-ini"),
                                         jsonObject.getJsonObject("sim-config").getInt("num-orders"),
-                                        jsonObject.getJsonObject("sim-config").getString("pizza-status"));
+                                        dataBaseObj.getString("pizza-status"));
             }
             else if(!databaseMode && jsonObject.getJsonObject("sim-config").containsKey("microservice")) {
                 JsonObject jsonMsObj = jsonObject.getJsonObject("sim-config").getJsonObject("microservice");
@@ -327,12 +311,11 @@ public class SimulatorResource {
                     resp = Response.status(Response.Status.BAD_REQUEST).entity(entity).build();
                 else{
                     msOrchestrator = RestClientBuilder.newBuilder()
-                                    .baseUri(URI.create(msBaseURL))
-                                    .connectTimeout(msConTimeOut, TimeUnit.MILLISECONDS)
-                                    .readTimeout(msResTimeOut, TimeUnit.MILLISECONDS)                                    
+                                    .baseUri(URI.create(jsonMsObj.getString("url")))
+                                    .connectTimeout(jsonMsObj.getInt("connection-timeout"), TimeUnit.MILLISECONDS)
+                                    .readTimeout(jsonMsObj.getInt("response-timeout"), TimeUnit.MILLISECONDS)                                    
                                     .build(OrderService.class);
-                    resp = createOrders(jsonObject.getJsonObject("sim-config").getInt("num-orders"),
-                                        jsonObject.getJsonObject("sim-config").getString("pizza-status"));
+                    resp = createOrders(jsonObject.getJsonObject("sim-config").getInt("num-orders"));
                 }
             }
             
@@ -361,15 +344,16 @@ public class SimulatorResource {
             .append(dateCal.get(Calendar.DATE)        < 10? "0" + dateCal.get(Calendar.DATE)        : dateCal.get(Calendar.DATE))
             .append(dateCal.get(Calendar.HOUR)        < 10? "0" + dateCal.get(Calendar.HOUR)        : dateCal.get(Calendar.HOUR))
             .append(dateCal.get(Calendar.MINUTE)      < 10? "0" + dateCal.get(Calendar.MINUTE)      : dateCal.get(Calendar.MINUTE))
-            .append(dateCal.get(Calendar.SECOND)      < 10? "0" + dateCal.get(Calendar.SECOND)      : dateCal.get(Calendar.SECOND));
+            .append(dateCal.get(Calendar.SECOND)      < 10? "0" + dateCal.get(Calendar.SECOND)      : dateCal.get(Calendar.SECOND))
+            .append(genNumber(100, 999));
 
         return strOrderId.toString();
     }
 
-    private String[] getOrderIdAndDateTime (String dateIni, int num) {        
+    private String[] getOrderIdAndDateTime (String dateFormat, String dateIni, int num) {        
         String [] strDates         = new String[2];
         Calendar cal               = Calendar.getInstance();
-        SimpleDateFormat formatIni = new SimpleDateFormat(databaseDtFm);                
+        SimpleDateFormat formatIni = new SimpleDateFormat(dateFormat);                
         Date dateCal               = null;
 
         try {
@@ -452,9 +436,9 @@ public class SimulatorResource {
      *
      * @return {@link Response}
      */
-    private Response createOrders(int numOrders, String pizzaStatus) throws Exception {   
-        SimpleDateFormat sdf = new SimpleDateFormat(databaseDtFm);
-        return createOrders(sdf.format(new Date()), numOrders, pizzaStatus);
+    private Response createOrders(int numOrders) throws Exception {   
+        SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
+        return createOrders("dd/MM/yyyy HH:mm:ss", sdf.format(new Date()), numOrders, "PIZZA ORDERED");
     }
 
     /**
@@ -462,15 +446,11 @@ public class SimulatorResource {
      *
      * @return {@link Response}
      */
-    private Response createOrders (String date, int numOrders, String pizzaStatus) {
+    private Response createOrders (String dateFormat, String date, int numOrders, String pizzaStatus) {
         Response resp;
         LOGGER.info("DATE-INI: " + date);
         try {
-            //resp = Response.status(Response.Status.ACCEPTED)
-            //            .entity(createOrder(date,numOrders,pizzaStatus))
-            //            .build();
-            //LOGGER.info(msOrchestrator.version().toString());
-            JsonObject pizzaOrder = createOrder(date,numOrders,pizzaStatus);
+            JsonObject pizzaOrder = createOrder(dateFormat,date,numOrders,pizzaStatus);
             LOGGER.info("PIZZA ORDER: " + pizzaOrder);
             JsonObject entity = null;
             if (databaseMode){
@@ -492,12 +472,11 @@ public class SimulatorResource {
             ex.printStackTrace();
             resp = Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(entity).build();
         }
-
         return resp;
     }
     
-    private JsonObject createOrder(String date, int numOrders, String pizzaStatus) throws Exception{
-        String[] strOrderDate = getOrderIdAndDateTime(date, numOrders);
+    private JsonObject createOrder(String dateFormat, String date, int numOrders, String pizzaStatus) throws Exception{
+        String[] strOrderDate = getOrderIdAndDateTime(dateFormat, date, numOrders);
         String[] strToppings  = genToppings();
         int totalPrice        = genNumber(10,20);
         int originalPrice     = totalPrice + genNumber(0, 2);
@@ -506,11 +485,11 @@ public class SimulatorResource {
             .add("paymentid", "p" + strOrderDate[1])
             .add("paymentTime", strOrderDate[0])
             .add("orderId", strOrderDate[1])
-            .add("paymentMethod", genPaymentMethod(genNumber(0, 4)))
-            .add("serviceSurvey", genNumber(1, 6))
-            .add("totalPaid", totalPrice)
+            .add("paymentMethod", String.valueOf(genPaymentMethod(genNumber(0, 4))))
+            .add("serviceSurvey", String.valueOf(genNumber(1, 6)))
+            .add("totalPaid", String.valueOf(totalPrice))
             .add("customerId", "sim345")
-            .add("originalPrice", originalPrice)
+            .add("originalPrice", String.valueOf(originalPrice))
             .build();        
         JsonObject jsonOBJStreetBody = JSON.createObjectBuilder()            
             .add("name", "SimStreet")
@@ -519,10 +498,10 @@ public class SimulatorResource {
             .build();
         JsonObject jsonOBJCustomerAddrBody = JSON.createObjectBuilder()            
             .add("street", jsonOBJStreetBody)            
-            .add("number", genNumber(1, 100))
-            .add("door", genNumber(1, 5))
+            .add("number", String.valueOf(genNumber(1, 100)))
+            .add("door", String.valueOf(genNumber(1, 5)))
             .add("email", "ivan.smith@sim-email.es")
-            .add("citycode", genNumber(28001, 28039))
+            .add("citycode", String.valueOf(genNumber(28001, 28039)))
             .add("city", "Madrid")            
             .build();
         JsonObject jsonOBJPizzaOrderedBody = JSON.createObjectBuilder()                                    
@@ -532,7 +511,7 @@ public class SimulatorResource {
             .add("topping3", strToppings[2])            
             .build();
         JsonObject jsonOBJCustomerIdBody = JSON.createObjectBuilder()                                    
-            .add("telephone", genNumber(601000000, 678000000))
+            .add("telephone", String.valueOf(genNumber(601000000, 678000000)))
             .add("email", "ivan.smith@sim-email.es")                  
             .build();
         JsonObject jsonOBJCustomerId = JSON.createObjectBuilder()                                    
