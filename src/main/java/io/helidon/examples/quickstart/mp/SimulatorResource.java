@@ -30,6 +30,8 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.net.URI;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
@@ -42,6 +44,7 @@ import javax.json.Json;
 import javax.json.JsonArrayBuilder;
 import javax.json.JsonBuilderFactory;
 import javax.json.JsonObject;
+import javax.json.JsonValue;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
@@ -299,14 +302,11 @@ public class SimulatorResource {
 
     private String getOrderIdFromDate(Calendar dateCal) {
         StringBuilder strOrderId = new StringBuilder().append(dateCal.get(Calendar.YEAR))
-                .append((dateCal.get(Calendar.MONTH) + 1) < 10 ? "0" + (dateCal.get(Calendar.MONTH) + 1)
-                        : (dateCal.get(Calendar.MONTH) + 1))
-                .append(dateCal.get(Calendar.DATE) < 10 ? "0" + dateCal.get(Calendar.DATE) : dateCal.get(Calendar.DATE))
-                .append(dateCal.get(Calendar.HOUR) < 10 ? "0" + dateCal.get(Calendar.HOUR) : dateCal.get(Calendar.HOUR))
-                .append(dateCal.get(Calendar.MINUTE) < 10 ? "0" + dateCal.get(Calendar.MINUTE)
-                        : dateCal.get(Calendar.MINUTE))
-                .append(dateCal.get(Calendar.SECOND) < 10 ? "0" + dateCal.get(Calendar.SECOND)
-                        : dateCal.get(Calendar.SECOND))
+                .append((dateCal.get(Calendar.MONTH) + 1) < 10 ? "0" + (dateCal.get(Calendar.MONTH) + 1) : (dateCal.get(Calendar.MONTH) + 1))
+                .append(dateCal.get(Calendar.DATE)        < 10 ? "0" + dateCal.get(Calendar.DATE)        : dateCal.get(Calendar.DATE))
+                .append(dateCal.get(Calendar.HOUR)        < 10 ? "0" + dateCal.get(Calendar.HOUR)        : dateCal.get(Calendar.HOUR))
+                .append(dateCal.get(Calendar.MINUTE)      < 10 ? "0" + dateCal.get(Calendar.MINUTE)      : dateCal.get(Calendar.MINUTE))
+                .append(dateCal.get(Calendar.SECOND)      < 10 ? "0" + dateCal.get(Calendar.SECOND)      : dateCal.get(Calendar.SECOND))
                 .append(genNumber(100, 999));
 
         return strOrderId.toString();
@@ -363,7 +363,7 @@ public class SimulatorResource {
     private String genBasePizza() {
         String[] size = { "Small", "Medium", "Large", "X-Large" };
         String[] base = { "BACON SPINACH ALFREDO", "CHEESE BASIC", "HAWAIIAN CHICKEN", "MEAT LOVER", "PEPPERONI",
-                "PREMIUM GARDEN VEGGIE", "SUPPREME", "ULTIMATE CHEESE LOVER" };
+                "PREMIUM GARDEN VEGGIE", "SUPREME", "ULTIMATE CHEESE LOVER" };
 
         return size[genNumber(0, size.length)] + " " + base[genNumber(0, base.length)];
     }
@@ -410,41 +410,55 @@ public class SimulatorResource {
         JsonArrayBuilder orders = Json.createArrayBuilder();
         SimpleDateFormat sdf    = new SimpleDateFormat(dateFormat);
         try {
-            ExecutorService executorService = new ThreadPoolExecutor(25, 25, 0L, TimeUnit.MICROSECONDS, new LinkedBlockingQueue<Runnable>());            
+            ExecutorService executorService = new ThreadPoolExecutor(50, 50, 0L, TimeUnit.MICROSECONDS, new LinkedBlockingQueue<Runnable>());            
             if (databaseMode) {
                 LOGGER.info("DATE-INI: " + date);
                 orders.add(createJsonPizzaOrder(dateFormat, date, 1, pizzaStatus));
             } else {          
                 Callable<String> callableTask = () -> {
-                    try {                        
+                    JsonValue orderId = null;
+                    try {                                                
                         JsonObject pizzaOrder = createJsonPizzaOrder(dateFormat, sdf.format(new Date()), 0, pizzaStatus);
-                        LOGGER.info("PIZZA ORDER ["+Thread.currentThread().getId()+"]: " + pizzaOrder);
+                        //LOGGER.info("PIZZA ORDER ["+Thread.currentThread().getId()+"]: " + pizzaOrder);
                         JsonObject pizzaOrderResp = msOrchestrator.createOrder(pizzaOrder);
-                        orders.add(pizzaOrder);
-                        orders.add(pizzaOrderResp);
+                        orderId = pizzaOrderResp.getJsonObject("resJSONDB").getValue("/orderId");
+                        //orders.add(pizzaOrder);
+                        //orders.add(pizzaOrderResp);
                         JsonObject updateStatus = JSON.createObjectBuilder()
-                                                    .add("orderId",pizzaOrderResp.getJsonObject("resJSONDB").getValue("/orderId"))
+                                                    .add("orderId",orderId)
                                                     .add("status","PIZZA PAID")
                                                     .build();
-                        LOGGER.info("PIZZA RESP ["+Thread.currentThread().getId()+"]: " + updateStatus);
-                        orders.add(msOrchestrator.changeStatus(updateStatus));
+                        //LOGGER.info("PIZZA RESP ["+Thread.currentThread().getId()+"]: " + updateStatus);
+                        //orders.add(msOrchestrator.changeStatus(updateStatus));
+                        msOrchestrator.changeStatus(updateStatus);
                     }
                     catch (Exception ex){
                         ex.printStackTrace();
                     }
 
-                    return "";
+                    return orderId.toString();
                 };
                 
                 List<Callable<String>> callableTasks = new ArrayList<>();
-                for (int task=0;task<numOrders+1;task++){
+                for (int task=0;task<numOrders;task++){
                     callableTasks.add(callableTask);
                 }
-                LOGGER.info("Task Start! at " + new Date());
+                LocalDateTime dIni = LocalDateTime.now();
+                LOGGER.info("Task Start! at " + dIni);
                 List<Future<String>> futureList = executorService.invokeAll(callableTasks); 
                 //orders.add(futureList.get(0).get());
                 executorService.shutdown();   
-                LOGGER.info("Task Ended! at " + new Date());
+                //executorService.awaitTermination();
+                for (int task=0;task<numOrders;task++){
+                    orders.add(JSON.createObjectBuilder().add("order",task).add("orderId",futureList.get(task).get()));
+                }
+                //LOGGER.info("Task Start! at " + Dini);
+                LocalDateTime dEnd = LocalDateTime.now();
+                LOGGER.info("Task Ended! at " + dEnd);
+                Duration duration = Duration.between(dEnd, dIni);
+                long diffMin = Math.abs(duration.toMinutes());            
+                long diffSec = Math.abs(duration.toSeconds()) - (diffMin*60); 
+                LOGGER.info("Time Taken! -- " + diffMin + " minutes " + diffSec + " seconds");
             }
             //LOGGER.info("orderreturn: " + msOrchestrator.createOrder().toString());
             resp = Response.status(Response.Status.ACCEPTED)
