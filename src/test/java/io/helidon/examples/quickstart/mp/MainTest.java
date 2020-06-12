@@ -18,11 +18,8 @@ package io.helidon.examples.quickstart.mp;
 
 import javax.enterprise.inject.se.SeContainer;
 import javax.enterprise.inject.spi.CDI;
-import javax.json.JsonObject;
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.ClientBuilder;
-import javax.ws.rs.client.Entity;
-import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
 import io.helidon.microprofile.server.Server;
@@ -43,7 +40,6 @@ class MainTest {
     void testHelloWorld() {
 
         Client client         = ClientBuilder.newClient();
-        JsonObject jsonObject = null;        
         Response resp         = null;
         
         resp = client
