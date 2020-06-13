@@ -15,7 +15,6 @@ import org.eclipse.microprofile.rest.client.inject.RegisterRestClient;
 
 @ApplicationScoped
 @RegisterRestClient(configKey = "microservice-Orchestrator")
-
 public interface OrderService {
     @GET
     @Path("/version")

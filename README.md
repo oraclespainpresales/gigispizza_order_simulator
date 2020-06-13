@@ -66,3 +66,40 @@ kubectl get pods                             # Verify connectivity to cluster
 kubectl create -f app.yaml               # Deploy application
 kubectl get service helidon-quickstart-mp  # Verify deployed service
 ```
+
+To create a simulator JSON config file for postman or similar
+minthreads and maxthreads are optional and default value is 20.
+To simulate with microservices:
+```json
+{
+    "sim-config" : {        
+        "num-orders" : 100,  
+        "pizza-status" : "PIZZA PAID",
+        "min-threads":"10",
+        "max-threads":"10",
+        "microservice": {
+            "url" : "https://madrid-gigispizza.wedoteam.io",
+            "connection-timeout" : 500000,
+            "response-timeout" : 500000
+        }
+    }
+}
+```
+To simulate with Database:
+```json
+{
+    "sim-config" : {        
+        "num-orders" : 100,  
+        "pizza-status" : "PIZZA PAID",
+        "min-threads":"10",
+        "max-threads":"10",
+        "database": {
+            "date-format" : "dd/MM/yyyy HH:mm:ss",
+            "date-ini" : "13/06/2020 10:45:34",
+            "connection-string" : "jdbc:oracle:thin:@//cdb.madrid-gigispizza.wedoteam.io:1521/dodbhp_pdb1.sub03010825490.devopsvcn.oraclevcn.com",
+            "user" : "microservice",
+            "password" : "AAZZ__welcomedevops123"
+        }
+    }
+}
+```
