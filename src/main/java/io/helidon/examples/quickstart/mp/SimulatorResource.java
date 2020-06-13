@@ -307,12 +307,10 @@ public class SimulatorResource {
                 else {
                     if((resp = verifyThreadsJsonProperties(jsonObject.getJsonObject("sim-config"), "min-threads")) == null){
                         if((resp = verifyThreadsJsonProperties(jsonObject.getJsonObject("sim-config"), "max-threads")) == null){
-                            //Create RestClient object to send rest commands to microservice orchestrator:
-                            msOrchestrator = RestClientBuilder.newBuilder().baseUri(URI.create(jsonMsObj.getString("url")))
-                                                .connectTimeout(jsonMsObj.getInt("connection-timeout"), TimeUnit.MILLISECONDS)
-                                                .readTimeout(jsonMsObj.getInt("response-timeout"), TimeUnit.MILLISECONDS)
-                                                .build(OrderService.class);
-                            PizzaOrder pizzaOrder = new PizzaOrder(minThreads, maxThreads, msOrchestrator);
+                            
+                            PizzaOrder pizzaOrder = new PizzaOrder(minThreads, maxThreads, jsonMsObj.getString("url"), 
+                                                                                           jsonMsObj.getInt("connection-timeout"),
+                                                                                           jsonMsObj.getInt("response-timeout"));
                             resp = pizzaOrder.createOrders(jsonObject.getJsonObject("sim-config").getInt("num-orders"),
                                                            jsonObject.getJsonObject("sim-config").getString("pizza-status"));
                         }
@@ -324,7 +322,8 @@ public class SimulatorResource {
         } catch (Exception ex) {
             LOGGER.log(Level.SEVERE, ex.getMessage());
             ex.printStackTrace();
-            JsonObject entity = JSON.createObjectBuilder().add("error", "problem with json config").build();
+            JsonObject entity = JSON.createObjectBuilder().add("error", "problem with json config")
+                                                          .add("error-mess",ex.getMessage()).build();
             return Response.status(Response.Status.BAD_REQUEST).entity(entity).build();
         }
     }

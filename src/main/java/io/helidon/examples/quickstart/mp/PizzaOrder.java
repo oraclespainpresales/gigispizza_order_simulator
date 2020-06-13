@@ -9,6 +9,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.net.URI;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
@@ -28,6 +29,7 @@ import javax.json.JsonValue;
 import javax.ws.rs.core.Response;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.eclipse.microprofile.rest.client.RestClientBuilder;
 
 public class PizzaOrder {
     private static final Logger LOGGER = Logger.getLogger(PizzaOrder.class.getName());
@@ -35,6 +37,10 @@ public class PizzaOrder {
 
     private boolean databaseMode = false;
     private OrderService msOrchestrator;
+
+    private String dbUser     = "";
+    private String dbPassword = "";
+    private String dbUrl      = ""; 
 
     @Inject
     @ConfigProperty(name="minThreads", defaultValue="20")
@@ -44,16 +50,26 @@ public class PizzaOrder {
     @ConfigProperty(name="maxThreads", defaultValue="20")
     private int maxThreads;
 
-    public PizzaOrder(int minThreads, int maxThreads, OrderService msOrchestrator){
-        this.msOrchestrator = msOrchestrator;
+    public PizzaOrder(int minThreads, int maxThreads, String baseURL, int connTimeout, int respTimeout){
         this.minThreads     = minThreads;
         this.maxThreads     = maxThreads;
+
+        //Create RestClient object to send rest commands to microservice orchestrator:
+        this.msOrchestrator = RestClientBuilder.newBuilder().baseUri(URI.create(baseURL))
+                                          .connectTimeout(connTimeout, TimeUnit.MILLISECONDS)
+                                          .readTimeout(respTimeout, TimeUnit.MILLISECONDS)
+                                          .build(OrderService.class);
     }
 
-    public PizzaOrder(int minThreads, int maxThreads, boolean databaseMode){
-        this.databaseMode   = databaseMode;
-        this.minThreads     = minThreads;
-        this.maxThreads     = maxThreads;
+    public PizzaOrder(int minThreads, int maxThreads, boolean databaseMode, 
+                      String dbUrl, String dbUser, String dbPass){
+        this.databaseMode = databaseMode;
+        this.minThreads   = minThreads;
+        this.maxThreads   = maxThreads;
+
+        this.dbUrl      = dbUrl;
+        this.dbUser     = dbUser;
+        this.dbPassword = dbPass;
     }
 
     private String getDateTimeZFormat(Date dateCal) {
@@ -174,7 +190,7 @@ public class PizzaOrder {
                        
             if (databaseMode) {
                 LOGGER.info("DATE-INI: " + date);
-                orders.add(createJsonPizzaOrder(dateFormat, date, 1, pizzaStatus));
+                orders = createOrdersWithDataBase(dateFormat,date,numOrders,pizzaStatus);
             } else {          
                 orders = createOrdersWithMicroservices(dateFormat,numOrders,pizzaStatus);
             }
@@ -194,6 +210,64 @@ public class PizzaOrder {
         return resp;
     }
 
+    private JsonArrayBuilder createOrdersWithDataBase (String dateFormat, String date, int numOrders, String pizzaStatus) throws Exception {
+        JsonArrayBuilder orders = Json.createArrayBuilder();
+        SimpleDateFormat sdf    = new SimpleDateFormat(dateFormat);
+
+        LOGGER.info("ThreadPoolCreation: minThreads["+minThreads+"] | maxThreads["+maxThreads+"]" );
+        ExecutorService executorService = new ThreadPoolExecutor(minThreads, maxThreads, 0L, TimeUnit.MICROSECONDS, new LinkedBlockingQueue<Runnable>()); 
+
+        //Create Pizza Order Database Task.
+        Callable<String> callableTask = () -> {
+            JsonValue orderId = null;
+            try {                                                
+                JsonObject jsonPizzaOrder = createJsonPizzaOrder(dateFormat, date, 1, pizzaStatus);
+                //LOGGER.info("PIZZA ORDER ["+Thread.currentThread().getId()+"]: " + pizzaOrder);
+                JsonObject pizzaPayment = jsonPizzaOrder.getJsonObject("payment");
+                LOGGER.info("PIZZA Payment ["+Thread.currentThread().getId()+"]: " + pizzaPayment.toString());
+                JsonObject pizzaOrder   = JSON.createObjectBuilder()
+                                              .add("order", jsonPizzaOrder.getJsonObject("order"))
+                                              .add("orderId",pizzaPayment.getString("orderId"))
+                                              .build();                
+                LOGGER.info("PIZZA Order   ["+Thread.currentThread().getId()+"]: " + pizzaPayment.toString());
+
+                DatabaseClient dbClient = new DatabaseClient(dbUrl,dbUser,dbPassword);
+                dbClient.executeInsertOrder(pizzaOrder);
+                dbClient.executeInsertPayment(pizzaPayment);
+            }
+            catch (Exception ex){
+                LOGGER.log(Level.SEVERE, "ERROR Task " + ex.getMessage());                
+                orderId = JsonValue.FALSE;          
+            }
+
+            return orderId.toString();
+        };
+        
+        
+        List<Callable<String>> callableTasks = new ArrayList<>();
+        for (int task=0;task<numOrders;task++){
+            callableTasks.add(callableTask);
+        }
+        LocalDateTime dIni = LocalDateTime.now();
+        LOGGER.info("Task Start! at " + dIni);
+        List<Future<String>> futureList = executorService.invokeAll(callableTasks); 
+        //orders.add(futureList.get(0).get());
+        executorService.shutdown();   
+        //executorService.awaitTermination();
+        for (int task=0;task<numOrders;task++){
+            orders.add(JSON.createObjectBuilder().add("order",task).add("orderId",futureList.get(task).get()));
+        }
+        
+        LocalDateTime dEnd = LocalDateTime.now();
+        LOGGER.info("Task Ended! at " + dEnd);
+        Duration duration = Duration.between(dEnd, dIni);
+        long diffMin = Math.abs(duration.toMinutes());            
+        long diffSec = Math.abs(duration.toSeconds()) - (diffMin*60); 
+        LOGGER.info("Time Taken! -- " + diffMin + " minutes " + diffSec + " seconds");
+
+        return orders;
+    }
+
     private JsonArrayBuilder createOrdersWithMicroservices(String dateFormat, int numOrders, String pizzaStatus) throws Exception {
         JsonArrayBuilder orders = Json.createArrayBuilder();
         SimpleDateFormat sdf    = new SimpleDateFormat(dateFormat);
@@ -206,7 +280,7 @@ public class PizzaOrder {
             JsonValue orderId = null;
             try {                                                
                 JsonObject pizzaOrder = createJsonPizzaOrder(dateFormat, sdf.format(new Date()), 0, pizzaStatus);
-                LOGGER.info("PIZZA ORDER ["+Thread.currentThread().getId()+"]: " + pizzaOrder);
+                //LOGGER.info("PIZZA ORDER ["+Thread.currentThread().getId()+"]: " + pizzaOrder);
                 JsonObject pizzaOrderResp = msOrchestrator.createOrder(pizzaOrder);
                 orderId = pizzaOrderResp.getJsonObject("resJSONDB").getValue("/orderId");
                 //orders.add(pizzaOrder);
@@ -215,12 +289,15 @@ public class PizzaOrder {
                                             .add("orderId",orderId)
                                             .add("status",pizzaStatus)
                                             .build();
+                
                 LOGGER.info("PIZZA RESP ["+Thread.currentThread().getId()+"]: " + updateStatus);
                 //orders.add(msOrchestrator.changeStatus(updateStatus));
-                msOrchestrator.changeStatus(updateStatus);
+                LOGGER.info("PIZZA RESP ["+Thread.currentThread().getId()+"]: " + msOrchestrator.changeStatus(updateStatus));
+                //JsonObject respStatus = msOrchestrator.changeStatus(updateStatus);
             }
             catch (Exception ex){
-                ex.printStackTrace();                
+                LOGGER.log(Level.SEVERE, "ERROR Task " + ex.getMessage());                
+                orderId = JsonValue.FALSE;          
             }
 
             return orderId.toString();
