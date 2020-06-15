@@ -181,6 +181,15 @@ public class SimulatorResource {
         } else if (!dataBaseObj.containsKey("connection-string")) {
             entity = JSON.createObjectBuilder().add("error", "No sim-config -> database -> connection-string provided")
                     .build();
+        } else if (!dataBaseObj.containsKey("client-credentials")) {
+            entity = JSON.createObjectBuilder().add("error", "No sim-config -> database -> client-credentials provided")
+                    .build();
+        } else if (!dataBaseObj.containsKey("keystore-password")) {
+            entity = JSON.createObjectBuilder().add("error", "No sim-config -> database -> keystore-password provided")
+                    .build();
+        } else if (!dataBaseObj.containsKey("truststore-password")) {
+            entity = JSON.createObjectBuilder().add("error", "No sim-config -> database -> truststore-password provided")
+                    .build();
         } else if (!dataBaseObj.containsKey("user")) {
             entity = JSON.createObjectBuilder().add("error", "No sim-config -> database -> user provided")
                     .build();
@@ -191,11 +200,14 @@ public class SimulatorResource {
             databaseMode = true;
 
             LOGGER.info("DATA-BASE MODE ON");
-            LOGGER.info("DATA-BASE date-format      : " + dataBaseObj.getString("date-format"));
-            LOGGER.info("DATA-BASE date-ini         : " + dataBaseObj.getString("date-ini"));
-            LOGGER.info("DATA-BASE connection-string: " + dataBaseObj.getString("connection-string"));
-            LOGGER.info("DATA-BASE user             : " + dataBaseObj.getString("user"));
-            LOGGER.info("DATA-BASE password         : " + dataBaseObj.getString("password"));
+            LOGGER.info("DATA-BASE date-format        : " + dataBaseObj.getString("date-format"));
+            LOGGER.info("DATA-BASE date-ini           : " + dataBaseObj.getString("date-ini"));
+            LOGGER.info("DATA-BASE connection-string  : " + dataBaseObj.getString("connection-string"));
+            LOGGER.info("DATA-BASE client-credentials : " + dataBaseObj.getString("client-credentials"));
+            LOGGER.info("DATA-BASE keystore-password  : " + dataBaseObj.getString("keystore-password"));
+            LOGGER.info("DATA-BASE truststore-password: " + dataBaseObj.getString("truststore-password"));
+            LOGGER.info("DATA-BASE user               : " + dataBaseObj.getString("user"));
+            LOGGER.info("DATA-BASE password           : " + dataBaseObj.getString("password"));
         }
 
         return entity;
@@ -291,7 +303,13 @@ public class SimulatorResource {
                 else{
                     if((resp = verifyThreadsJsonProperties(jsonObject.getJsonObject("sim-config"), "min-threads")) == null){
                         if((resp = verifyThreadsJsonProperties(jsonObject.getJsonObject("sim-config"), "max-threads")) == null){
-                            PizzaOrder pizzaOrder = new PizzaOrder(minThreads, maxThreads, true);
+                            PizzaOrder pizzaOrder = new PizzaOrder(minThreads, maxThreads, true,
+                                                                    dataBaseObj.getString("connection-string"),
+                                                                    dataBaseObj.getString("user"),
+                                                                    dataBaseObj.getString("password"),
+                                                                    dataBaseObj.getString("client-credentials"),
+                                                                    dataBaseObj.getString("keystore-password"),
+                                                                    dataBaseObj.getString("truststore-password"));
                             resp = pizzaOrder.createOrders(dataBaseObj.getString("date-format"), 
                                                            dataBaseObj.getString("date-ini"),
                                                            jsonObject.getJsonObject("sim-config").getInt("num-orders"),

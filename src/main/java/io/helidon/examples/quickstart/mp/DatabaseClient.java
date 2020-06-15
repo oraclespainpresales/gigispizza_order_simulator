@@ -17,11 +17,28 @@ public class DatabaseClient {
     private String dbUser     = System.getenv().get("DB_USER");
     private String dbPassword = System.getenv().get("DB_PASSWORD");
     private String dbUrl      = System.getenv().get("DB_URL") + System.getenv().get("DB_SERVICE_NAME") + "?TNS_ADMIN=/function/wallet";
+    private String clientCred = "/function/wallet";
+    private String keyStorePassword   = "";
+    private String truststorePassword = "";
 
-    public DatabaseClient (String dbUrl, String dbUser, String dbPassword){
+    public DatabaseClient (String dbUrl,                             
+                            String dbUser, 
+                            String dbPassword, 
+                            String clientCred,
+                            String keyStorePassword, 
+                            String truststorePassword) {
         this.dbUrl      = dbUrl;
+        this.clientCred = clientCred;
         this.dbUser     = dbUser;
         this.dbPassword = dbPassword;
+
+        this.keyStorePassword   = keyStorePassword;
+        this.truststorePassword = truststorePassword;
+
+        //if an ATP connection then the new ATP connection string is:
+        //daseURL?TNS_ADMIN=<client_credentials_url>
+        if (!this.clientCred.equals("")) 
+            this.dbUrl +="?TNS_ADMIN="+this.clientCred;
     }
 
     private void getConnectionPool(){        
@@ -46,10 +63,23 @@ public class DatabaseClient {
     }
 
     private Connection getConnectionThin() throws SQLException, IOException {        
-        LOGGER.info("SQLDB_URL:      " + dbUrl);
+        LOGGER.info("SQLDB_URL:      " + dbUrl);        
         LOGGER.info("SQLDB_USERNAME: " + dbUser);
         LOGGER.info("SQLDB_PASSWORD: " + "********");
- 
+        LOGGER.info("SQLDB_KEYSTOREPASSWORD  : " + (keyStorePassword.equals("")? "False" : "true"));
+        LOGGER.info("SQLDB_TRUSTSTOREPASSWORD: " + (truststorePassword.equals("")? "False" : "true"));
+
+        System.setProperty("oracle.jdbc.driver.OracleDriver", "true");
+        System.setProperty("oracle.jdbc.fanEnabled", "false");
+        System.setProperty("oracle.net.ssl_version", "1.2");        
+        System.setProperty("javax.net.ssl.keyStore", clientCred + "/keystore.jks");
+        System.setProperty("javax.net.ssl.keyStorePassword", keyStorePassword);
+        System.setProperty("javax.net.ssl.trustStore", clientCred + "/truststore.jks");
+        System.setProperty("javax.net.ssl.trustStorePassword", truststorePassword);
+        System.setProperty("oracle.net.tns_admin", clientCred);
+
+        DriverManager.registerDriver(new oracle.jdbc.OracleDriver());
+                
         return DriverManager.getConnection(dbUrl, dbUser, dbPassword);
     }
 
@@ -58,36 +88,42 @@ public class DatabaseClient {
         Connection conn = null;      
         try {
             conn = getConnectionThin();
-             // Insert some data
-            StringBuffer insertSQL = new StringBuffer("INSERT INTO PIZZAORDER (")
-                                              .append("ID").append(",")
-                                              .append("DATA").append(",")
-                                              .append("TIMESTAMP").append(")")
-                                              .append(" VALUES (?,?,SELECT SYSTIMESTAMP FROM DUAL)");
-                                              //.append("TO_TIMESTAMP(?,'YYYY-MM-DD\"T\"HH24:MI:SS.ff3\"Z\"'))");
- 
-            // logging values passed:
-            LOGGER.info(insertSQL.toString());
-            LOGGER.info("parameter 1 OrderID: "  + pizzaOrder.getString("orderId"));
-            LOGGER.info("parameter 2 Data:    "  + pizzaOrder.toString());
-            
-            PreparedStatement pstat = conn.prepareStatement(insertSQL.toString());
- 
-            pstat.setString(1,pizzaOrder.getString("orderId"));
-            pstat.setString(2,pizzaOrder.toString());
- 
-            if (pstat.executeUpdate() > 0){
-                dbresult = "PizzaOrder with orderId["+pizzaOrder.getString("orderId")+"] inserted OK!";
+            if (conn!= null){
+                // Insert some data                             
+                StringBuffer insertSQL = new StringBuffer("INSERT INTO MICROSERVICE.PIZZAORDER (")
+                                                .append("ID").append(",")
+                                                .append("DATA").append(",")
+                                                .append("TIMESTAMP").append(")")
+                                                .append(" VALUES (?,?,"+System.currentTimeMillis() +")");
+    
+                // logging values passed:
+                LOGGER.info(insertSQL.toString());
+                LOGGER.info("parameter 1 OrderID: "  + pizzaOrder.getString("orderId"));
+                LOGGER.info("parameter 2 Data:    "  + pizzaOrder.toString());
+                               
+                PreparedStatement pstat = conn.prepareStatement(insertSQL.toString());
+    
+                pstat.setString(1,pizzaOrder.getString("orderId"));
+                pstat.setString(2,pizzaOrder.toString());
+    
+                if (pstat.executeUpdate() > 0){
+                    dbresult = "PizzaOrder with orderId["+pizzaOrder.getString("orderId")+"] inserted OK!";
+                }
+                else {
+                    LOGGER.log(Level.SEVERE,"ERROR IN DB INSERT PizzaOrder with orderId["+pizzaOrder.getString("orderId")+"] result <= 0");
+                    dbresult = "ERROR IN DB INSERT PizzaOrder with orderId["+pizzaOrder.getString("orderId")+"] result <= 0";
+                }
+                conn.close();
             }
             else {
-                LOGGER.log(Level.SEVERE,"ERROR IN DB INSERT PizzaOrder with orderId["+pizzaOrder.getString("orderId")+"] result <= 0");
-                dbresult = "ERROR IN DB INSERT PizzaOrder with orderId["+pizzaOrder.getString("orderId")+"] result <= 0";
+                LOGGER.log(Level.SEVERE,"ERROR ["+pizzaOrder.getString("orderId")+"] Connection null!");
+                dbresult = "ERROR ["+pizzaOrder.getString("orderId")+"] Connection null!";
             }
-            conn.close();
         }
         catch (Exception ex){
             try{
-                conn.close();
+                if (conn != null)
+                    conn.close();
             }
             catch(SQLException sqlex){
                 LOGGER.log(Level.SEVERE,"ERROR close connection on Order ["+pizzaOrder.getString("orderId")+"] " + ex.getMessage());    
@@ -97,7 +133,15 @@ public class DatabaseClient {
             LOGGER.log(Level.SEVERE,"ERROR ["+pizzaOrder.getString("orderId")+"] " + ex.getMessage());
             dbresult = "ERROR ["+pizzaOrder.getString("orderId")+"] " + ex.getMessage();
         }
-        
+        finally{
+            try{
+                if (conn!=null)
+                    conn.close();
+            }
+            catch(SQLException sqlex){
+                LOGGER.log(Level.SEVERE,"ERROR close connection on Order ["+pizzaOrder.getString("orderId")+"] " + sqlex.getMessage());    
+            }
+        }        
         return dbresult;
     }
 
@@ -106,56 +150,73 @@ public class DatabaseClient {
         Connection conn = null;
         try {
             conn = getConnectionThin();
-            StringBuffer insertSQL = new StringBuffer("INSERT INTO PAYMENTS (")
-                                              .append("PAYMENTCODE").append(",")
-                                              .append("ORDERID").append(",")
-                                              .append("PAYMENTTIME").append(",")
-                                              .append("PAYMENTMETHOD").append(",")
-                                              //.append("SERVICESURVEY").append(",")
-                                              .append("ORIGINALPRICE").append(",")
-                                              .append("TOTALPAID").append(",")
-                                              .append("CUSTOMERID").append(")")
-                                              .append(" VALUES (SELECT PAYMENT_SEQ.nextval FROM DUAL,")
-                                              .append("?,TO_TIMESTAMP(?,'YYYY-MM-DD\"T\"HH24:MI:SS.ff3\"Z\"'),?,?,?,?)");
- 
-            // logging values passed:
-            LOGGER.info(insertSQL.toString());
-            LOGGER.info("parameter 1 orderId      : " + jsonPayment.getString("orderId"));
-            LOGGER.info("parameter 2 paymentTime  : " + jsonPayment.getString("paymentTime"));
-            LOGGER.info("parameter 3 paymentMethod: " + jsonPayment.getString("paymentMethod"));
-            LOGGER.info("parameter 4 originalPrice: " + jsonPayment.getString("originalPrice"));
-            //System.out.println("parameter 5 servSurvey: " + servSurvey);
-            LOGGER.info("parameter 5 totalPaid    : " + jsonPayment.getString("totalPaid"));
-            LOGGER.info("parameter 6 customerId   : " + jsonPayment.getString("customerId"));
- 
-            PreparedStatement pstat = conn.prepareStatement(insertSQL.toString());
- 
-            pstat.setString(1,jsonPayment.getString("orderId"));
-            pstat.setString(2,jsonPayment.getString("paymentTime"));
-            pstat.setString(3,jsonPayment.getString("paymentMethod"));
-            pstat.setFloat (4,Float.parseFloat(jsonPayment.getString("originalPrice")));
-            //pstat.setInt   (5,Integer.parseInt(servSurvey));
-            pstat.setFloat (5,Float.parseFloat(jsonPayment.getString("totalPaid")));
-            pstat.setString(6,jsonPayment.getString("customerId"));
- 
-            if (pstat.executeUpdate() > 0){
-                dbresult = "Payment for orderId["+jsonPayment.getString("orderId")+"] inserted OK!";
+            if (conn!=null) {                
+                StringBuffer insertSQL = new StringBuffer("INSERT INTO MICROSERVICE.PAYMENTS (")
+                                                .append("PAYMENTCODE").append(",")
+                                                .append("ORDERID").append(",")
+                                                .append("PAYMENTTIME").append(",")
+                                                .append("PAYMENTMETHOD").append(",")
+                                                //.append("SERVICESURVEY").append(",")
+                                                .append("ORIGINALPRICE").append(",")
+                                                .append("TOTALPAID").append(",")
+                                                .append("CUSTOMERID").append(")")
+                                                .append(" VALUES (PAYMENT_SEQ.nextval,")
+                                                .append("?,TO_TIMESTAMP(?,'YYYY-MM-DD\"T\"HH24:MI:SS.ff3\"Z\"'),?,?,?,?)");
+    
+                // logging values passed:
+                LOGGER.info(insertSQL.toString());
+                LOGGER.info("parameter 1 orderId      : " + jsonPayment.getString("orderId"));
+                LOGGER.info("parameter 2 paymentTime  : " + jsonPayment.getString("paymentTime"));
+                LOGGER.info("parameter 3 paymentMethod: " + jsonPayment.getString("paymentMethod"));
+                LOGGER.info("parameter 4 originalPrice: " + jsonPayment.getString("originalPrice"));
+                //System.out.println("parameter 5 servSurvey: " + servSurvey);
+                LOGGER.info("parameter 5 totalPaid    : " + jsonPayment.getString("totalPaid"));
+                LOGGER.info("parameter 6 customerId   : " + jsonPayment.getString("customerId"));
+    
+                PreparedStatement pstat = conn.prepareStatement(insertSQL.toString());
+    
+                pstat.setString(1,jsonPayment.getString("orderId"));
+                pstat.setString(2,jsonPayment.getString("paymentTime"));
+                pstat.setString(3,jsonPayment.getString("paymentMethod"));
+                pstat.setFloat (4,Float.parseFloat(jsonPayment.getString("originalPrice")));
+                //pstat.setInt   (5,Integer.parseInt(servSurvey));
+                pstat.setFloat (5,Float.parseFloat(jsonPayment.getString("totalPaid")));
+                pstat.setString(6,jsonPayment.getString("customerId"));
+    
+                if (pstat.executeUpdate() > 0){
+                    dbresult = "Payment for orderId["+jsonPayment.getString("orderId")+"] inserted OK!";
+                }
+                else {
+                    LOGGER.log(Level.SEVERE,"ERROR IN DB INSERT orderId["+jsonPayment.getString("orderId")+"] result <= 0");
+                    dbresult = "ERROR IN DB INSERT orderId["+jsonPayment.getString("orderId")+"] result <= 0";
+                }
+                conn.close();
             }
             else {
-                LOGGER.log(Level.SEVERE,"ERROR IN DB INSERT orderId["+jsonPayment.getString("orderId")+"] result <= 0");
-                dbresult = "ERROR IN DB INSERT orderId["+jsonPayment.getString("orderId")+"] result <= 0";
+                LOGGER.log(Level.SEVERE,"ERROR ["+jsonPayment.getString("orderId")+"] Connection null!");
+                dbresult = "ERROR ["+jsonPayment.getString("orderId")+"] Connection null!";
             }
         }
         catch (Exception ex){
             try{
-                conn.close();
+                if (conn!=null)
+                    conn.close();
             }
             catch(SQLException sqlex){
-                LOGGER.log(Level.SEVERE,"ERROR close connection on Order ["+pizzaOrder.getString("orderId")+"] " + ex.getMessage());    
+                LOGGER.log(Level.SEVERE,"ERROR close connection on Order ["+jsonPayment.getString("orderId")+"] " + ex.getMessage());    
             }
             ex.printStackTrace();
             LOGGER.log(Level.SEVERE,"ERROR ["+jsonPayment.getString("orderId")+"] " + ex.getMessage());
             dbresult = "ERROR ["+jsonPayment.getString("orderId")+"] " + ex.getMessage();
+        }
+        finally{
+            try{
+                if (conn!=null)
+                    conn.close();
+            }
+            catch(SQLException sqlex){
+                LOGGER.log(Level.SEVERE,"ERROR close connection on Order ["+jsonPayment.getString("orderId")+"] " + sqlex.getMessage());    
+            }
         }
         return dbresult;
     }

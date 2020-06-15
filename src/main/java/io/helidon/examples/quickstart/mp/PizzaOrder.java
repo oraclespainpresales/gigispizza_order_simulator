@@ -38,9 +38,12 @@ public class PizzaOrder {
     private boolean databaseMode = false;
     private OrderService msOrchestrator;
 
-    private String dbUser     = "";
-    private String dbPassword = "";
-    private String dbUrl      = ""; 
+    private String dbUser             = "";
+    private String dbPassword         = "";
+    private String dbUrl              = "";
+    private String clientCred         = ""; 
+    private String keystorePassword   = ""; 
+    private String truststorePassword = ""; 
 
     @Inject
     @ConfigProperty(name="minThreads", defaultValue="20")
@@ -49,6 +52,8 @@ public class PizzaOrder {
     @Inject
     @ConfigProperty(name="maxThreads", defaultValue="20")
     private int maxThreads;
+
+    private int seconds = 1;
 
     public PizzaOrder(int minThreads, int maxThreads, String baseURL, int connTimeout, int respTimeout){
         this.minThreads     = minThreads;
@@ -62,14 +67,22 @@ public class PizzaOrder {
     }
 
     public PizzaOrder(int minThreads, int maxThreads, boolean databaseMode, 
-                      String dbUrl, String dbUser, String dbPass){
+                      String dbUrl, String dbUser, String dbPass, 
+                      String clientCred,
+                      String keystorePassword,
+                      String truststorePassword){
+
         this.databaseMode = databaseMode;
         this.minThreads   = minThreads;
         this.maxThreads   = maxThreads;
 
-        this.dbUrl      = dbUrl;
+        this.truststorePassword = truststorePassword;        
+        this.keystorePassword   = keystorePassword;
+        
+        this.clientCred = clientCred;        
+        this.dbUrl      = dbUrl;          
         this.dbUser     = dbUser;
-        this.dbPassword = dbPass;
+        this.dbPassword = dbPass;       
     }
 
     private String getDateTimeZFormat(Date dateCal) {
@@ -99,6 +112,7 @@ public class PizzaOrder {
             dateCal = formatIni.parse(dateIni);
             // set calendar datetime and adds num seconds
             cal.setTime(dateCal);
+            LOGGER.info ("SECONDS to ADD " + num);
             cal.add(Calendar.SECOND, num);
 
             // get DateTime in Z format
@@ -209,124 +223,6 @@ public class PizzaOrder {
         }
         return resp;
     }
-
-    private JsonArrayBuilder createOrdersWithDataBase (String dateFormat, String date, int numOrders, String pizzaStatus) throws Exception {
-        JsonArrayBuilder orders = Json.createArrayBuilder();
-        SimpleDateFormat sdf    = new SimpleDateFormat(dateFormat);
-
-        LOGGER.info("ThreadPoolCreation: minThreads["+minThreads+"] | maxThreads["+maxThreads+"]" );
-        ExecutorService executorService = new ThreadPoolExecutor(minThreads, maxThreads, 0L, TimeUnit.MICROSECONDS, new LinkedBlockingQueue<Runnable>()); 
-
-        //Create Pizza Order Database Task.
-        Callable<String> callableTask = () -> {
-            JsonValue orderId = null;
-            try {                                                
-                JsonObject jsonPizzaOrder = createJsonPizzaOrder(dateFormat, date, 1, pizzaStatus);
-                //LOGGER.info("PIZZA ORDER ["+Thread.currentThread().getId()+"]: " + pizzaOrder);
-                JsonObject pizzaPayment = jsonPizzaOrder.getJsonObject("payment");
-                LOGGER.info("PIZZA Payment ["+Thread.currentThread().getId()+"]: " + pizzaPayment.toString());
-                JsonObject pizzaOrder   = JSON.createObjectBuilder()
-                                              .add("order", jsonPizzaOrder.getJsonObject("order"))
-                                              .add("orderId",pizzaPayment.getString("orderId"))
-                                              .build();                
-                LOGGER.info("PIZZA Order   ["+Thread.currentThread().getId()+"]: " + pizzaPayment.toString());
-
-                DatabaseClient dbClient = new DatabaseClient(dbUrl,dbUser,dbPassword);
-                dbClient.executeInsertOrder(pizzaOrder);
-                dbClient.executeInsertPayment(pizzaPayment);
-            }
-            catch (Exception ex){
-                LOGGER.log(Level.SEVERE, "ERROR Task " + ex.getMessage());                
-                orderId = JsonValue.FALSE;          
-            }
-
-            return orderId.toString();
-        };
-        
-        
-        List<Callable<String>> callableTasks = new ArrayList<>();
-        for (int task=0;task<numOrders;task++){
-            callableTasks.add(callableTask);
-        }
-        LocalDateTime dIni = LocalDateTime.now();
-        LOGGER.info("Task Start! at " + dIni);
-        List<Future<String>> futureList = executorService.invokeAll(callableTasks); 
-        //orders.add(futureList.get(0).get());
-        executorService.shutdown();   
-        //executorService.awaitTermination();
-        for (int task=0;task<numOrders;task++){
-            orders.add(JSON.createObjectBuilder().add("order",task).add("orderId",futureList.get(task).get()));
-        }
-        
-        LocalDateTime dEnd = LocalDateTime.now();
-        LOGGER.info("Task Ended! at " + dEnd);
-        Duration duration = Duration.between(dEnd, dIni);
-        long diffMin = Math.abs(duration.toMinutes());            
-        long diffSec = Math.abs(duration.toSeconds()) - (diffMin*60); 
-        LOGGER.info("Time Taken! -- " + diffMin + " minutes " + diffSec + " seconds");
-
-        return orders;
-    }
-
-    private JsonArrayBuilder createOrdersWithMicroservices(String dateFormat, int numOrders, String pizzaStatus) throws Exception {
-        JsonArrayBuilder orders = Json.createArrayBuilder();
-        SimpleDateFormat sdf    = new SimpleDateFormat(dateFormat);
-
-        LOGGER.info("ThreadPoolCreation: minThreads["+minThreads+"] | maxThreads["+maxThreads+"]" );
-        ExecutorService executorService = new ThreadPoolExecutor(minThreads, maxThreads, 0L, TimeUnit.MICROSECONDS, new LinkedBlockingQueue<Runnable>()); 
-
-        //Create Pizza Order Task.
-        Callable<String> callableTask = () -> {
-            JsonValue orderId = null;
-            try {                                                
-                JsonObject pizzaOrder = createJsonPizzaOrder(dateFormat, sdf.format(new Date()), 0, pizzaStatus);
-                //LOGGER.info("PIZZA ORDER ["+Thread.currentThread().getId()+"]: " + pizzaOrder);
-                JsonObject pizzaOrderResp = msOrchestrator.createOrder(pizzaOrder);
-                orderId = pizzaOrderResp.getJsonObject("resJSONDB").getValue("/orderId");
-                //orders.add(pizzaOrder);
-                //orders.add(pizzaOrderResp);
-                JsonObject updateStatus = JSON.createObjectBuilder()
-                                            .add("orderId",orderId)
-                                            .add("status",pizzaStatus)
-                                            .build();
-                
-                LOGGER.info("PIZZA RESP ["+Thread.currentThread().getId()+"]: " + updateStatus);
-                //orders.add(msOrchestrator.changeStatus(updateStatus));
-                LOGGER.info("PIZZA RESP ["+Thread.currentThread().getId()+"]: " + msOrchestrator.changeStatus(updateStatus));
-                //JsonObject respStatus = msOrchestrator.changeStatus(updateStatus);
-            }
-            catch (Exception ex){
-                LOGGER.log(Level.SEVERE, "ERROR Task " + ex.getMessage());                
-                orderId = JsonValue.FALSE;          
-            }
-
-            return orderId.toString();
-        };
-        
-        
-        List<Callable<String>> callableTasks = new ArrayList<>();
-        for (int task=0;task<numOrders;task++){
-            callableTasks.add(callableTask);
-        }
-        LocalDateTime dIni = LocalDateTime.now();
-        LOGGER.info("Task Start! at " + dIni);
-        List<Future<String>> futureList = executorService.invokeAll(callableTasks); 
-        //orders.add(futureList.get(0).get());
-        executorService.shutdown();   
-        //executorService.awaitTermination();
-        for (int task=0;task<numOrders;task++){
-            orders.add(JSON.createObjectBuilder().add("order",task).add("orderId",futureList.get(task).get()));
-        }
-        
-        LocalDateTime dEnd = LocalDateTime.now();
-        LOGGER.info("Task Ended! at " + dEnd);
-        Duration duration = Duration.between(dEnd, dIni);
-        long diffMin = Math.abs(duration.toMinutes());            
-        long diffSec = Math.abs(duration.toSeconds()) - (diffMin*60); 
-        LOGGER.info("Time Taken! -- " + diffMin + " minutes " + diffSec + " seconds");
-
-        return orders;
-    }
     
     private JsonObject createJsonPizzaOrder(String dateFormat, String date, int segsCal, String pizzaStatus) {
         String[] strOrderDate = getOrderIdAndDateTime(dateFormat, date, segsCal);
@@ -378,13 +274,14 @@ public class PizzaOrder {
                 .add("customer",jsonOBJCustomerId)
                 .add("pizzaOrdered",jsonOBJPizzaOrderedBody)
                 .add("totalPrice",totalPrice + "$")
-                .add("customerAdress",jsonOBJCustomerAddrBody)                    
+                .add("customerAdress",jsonOBJCustomerAddrBody)  
+                .add("orderId",strOrderDate[1])
+                .add("status",pizzaStatus)                  
                 .build();
 
             jsonResp = JSON.createObjectBuilder()
                             .add("order",jsonOBJOrderBody)
-                            .add("payment",jsonOBJPaymentBody)
-                            .add("status",pizzaStatus)
+                            .add("payment",jsonOBJPaymentBody)                            
                             .build();
         }
         catch (Exception ex){
@@ -395,5 +292,123 @@ public class PizzaOrder {
         }
         
         return jsonResp;
+    }
+
+    private JsonArrayBuilder createOrdersWithDataBase (String dateFormat, String date, int numOrders, String pizzaStatus) throws Exception {
+        JsonArrayBuilder orders = Json.createArrayBuilder();
+        SimpleDateFormat sdf    = new SimpleDateFormat(dateFormat);
+
+        LOGGER.info("ThreadPoolCreation: minThreads["+minThreads+"] | maxThreads["+maxThreads+"]" );
+        ExecutorService executorService = new ThreadPoolExecutor(minThreads, maxThreads, 0L, TimeUnit.MICROSECONDS, new LinkedBlockingQueue<Runnable>()); 
+        
+        //Create Pizza Order Database Task.
+        Callable<String> callableTaskDb = () -> {
+            String orderId = null;            
+            try {                                                
+                JsonObject jsonPizzaOrder = createJsonPizzaOrder(dateFormat, date, seconds++, pizzaStatus);
+                //LOGGER.info("PIZZA ORDER ["+Thread.currentThread().getId()+"]: " + pizzaOrder);
+                JsonObject pizzaPayment = jsonPizzaOrder.getJsonObject("payment");
+                JsonObject pizzaOrder   = jsonPizzaOrder.getJsonObject("order");
+                orderId = pizzaOrder.getString("orderId");
+                LOGGER.info("PIZZA Payment ["+Thread.currentThread().getId()+"]: " + pizzaPayment.toString());                                
+                LOGGER.info("PIZZA Order   ["+Thread.currentThread().getId()+"]: " + pizzaOrder.toString());
+
+                DatabaseClient dbClient = new DatabaseClient(dbUrl,dbUser,dbPassword,clientCred,keystorePassword,truststorePassword);
+                LOGGER.info("dnblient Created created");
+                LOGGER.info(dbClient.executeInsertOrder(pizzaOrder));
+                LOGGER.info(dbClient.executeInsertPayment(pizzaPayment));
+            }
+            catch (Exception ex){
+                ex.printStackTrace();
+                LOGGER.log(Level.SEVERE, "ERROR Task " + ex.getMessage());                
+                orderId = "false";
+            }
+
+            return orderId.toString();
+        };
+        
+        
+        List<Callable<String>> callableTasksDb = new ArrayList<>();
+        for (int task=0;task<numOrders;task++){
+            callableTasksDb.add(callableTaskDb);
+        }
+        LocalDateTime dIni = LocalDateTime.now();
+        LOGGER.info("Tasks Start! at " + dIni);
+        List<Future<String>> futureList = executorService.invokeAll(callableTasksDb); 
+        //orders.add(futureList.get(0).get());
+        executorService.shutdown();   
+        //executorService.awaitTermination();
+        for (int task=0;task<numOrders;task++){
+            orders.add(JSON.createObjectBuilder().add("order",task).add("orderId",futureList.get(task).get()));
+        }
+        
+        LocalDateTime dEnd = LocalDateTime.now();
+        LOGGER.info("Task Ended! at " + dEnd);
+        Duration duration = Duration.between(dEnd, dIni);
+        long diffMin = Math.abs(duration.toMinutes());            
+        long diffSec = Math.abs(duration.toSeconds()) - (diffMin*60); 
+        LOGGER.info("Time Taken! -- " + diffMin + " minutes " + diffSec + " seconds");
+
+        return orders;
+    }
+
+    private JsonArrayBuilder createOrdersWithMicroservices(String dateFormat, int numOrders, String pizzaStatus) throws Exception {
+        JsonArrayBuilder orders = Json.createArrayBuilder();
+        SimpleDateFormat sdf    = new SimpleDateFormat(dateFormat);
+
+        LOGGER.info("ThreadPoolCreation: minThreads["+minThreads+"] | maxThreads["+maxThreads+"]" );
+        ExecutorService executorService = new ThreadPoolExecutor(minThreads, maxThreads, 0L, TimeUnit.MICROSECONDS, new LinkedBlockingQueue<Runnable>()); 
+
+        //Create Pizza Order Task.
+        Callable<String> callableTaskMicroservice = () -> {
+            JsonValue orderId = null;
+            try {                                                
+                JsonObject pizzaOrder = createJsonPizzaOrder(dateFormat, sdf.format(new Date()), 0, pizzaStatus);
+                //LOGGER.info("PIZZA ORDER ["+Thread.currentThread().getId()+"]: " + pizzaOrder);
+                JsonObject pizzaOrderResp = msOrchestrator.createOrder(pizzaOrder);
+                orderId = pizzaOrderResp.getJsonObject("resJSONDB").getValue("/orderId");
+                //orders.add(pizzaOrder);
+                //orders.add(pizzaOrderResp);
+                JsonObject updateStatus = JSON.createObjectBuilder()
+                                            .add("orderId",orderId)
+                                            .add("status",pizzaStatus)
+                                            .build();
+                
+                LOGGER.info("PIZZA RESP ["+Thread.currentThread().getId()+"]: " + updateStatus);
+                //orders.add(msOrchestrator.changeStatus(updateStatus));
+                LOGGER.info("PIZZA RESP ["+Thread.currentThread().getId()+"]: " + msOrchestrator.changeStatus(updateStatus));
+                //JsonObject respStatus = msOrchestrator.changeStatus(updateStatus);
+            }
+            catch (Exception ex){
+                LOGGER.log(Level.SEVERE, "ERROR Task " + ex.getMessage());                
+                orderId = JsonValue.FALSE;          
+            }
+
+            return orderId.toString();
+        };
+        
+        
+        List<Callable<String>> callableTasks = new ArrayList<>();
+        for (int task=0;task<numOrders;task++){
+            callableTasks.add(callableTaskMicroservice);
+        }
+        LocalDateTime dIni = LocalDateTime.now();
+        LOGGER.info("Task Start! at " + dIni);
+        List<Future<String>> futureList = executorService.invokeAll(callableTasks); 
+        //orders.add(futureList.get(0).get());
+        executorService.shutdown();   
+        //executorService.awaitTermination();
+        for (int task=0;task<numOrders;task++){
+            orders.add(JSON.createObjectBuilder().add("order",task).add("orderId",futureList.get(task).get()));
+        }
+        
+        LocalDateTime dEnd = LocalDateTime.now();
+        LOGGER.info("Task Ended! at " + dEnd);
+        Duration duration = Duration.between(dEnd, dIni);
+        long diffMin = Math.abs(duration.toMinutes());            
+        long diffSec = Math.abs(duration.toSeconds()) - (diffMin*60); 
+        LOGGER.info("Time Taken! -- " + diffMin + " minutes " + diffSec + " seconds");
+
+        return orders;
     }
 }
