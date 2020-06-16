@@ -227,7 +227,7 @@ public class DatabaseClient {
         try {
             conn = getConnectionThin();
             if (conn!=null) {                
-                StringBuffer updateSQL = new StringBuffer("UPDATE MICROSERVICE.TOPPING_STORAGE SET consumed = consumed + 1, last_updated =  WHERE topping in (?,?,?) ");
+                StringBuffer updateSQL = new StringBuffer("UPDATE MICROSERVICE.TOPPING_STORAGE SET consumed = consumed + 1 WHERE topping in (?,?,?) ");
     
                 // logging values passed:
                 LOGGER.info(updateSQL.toString());
