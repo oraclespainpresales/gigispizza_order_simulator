@@ -89,16 +89,19 @@ To simulate with Database:
 ```json
 {
     "sim-config" : {        
-        "num-orders" : 100,  
+        "num-orders" : 10,  
         "pizza-status" : "PIZZA PAID",
         "min-threads":"10",
         "max-threads":"10",
         "database": {
-            "date-format" : "dd/MM/yyyy HH:mm:ss",
-            "date-ini" : "13/06/2020 10:45:34",
-            "connection-string" : "jdbc:oracle:thin:@//cdb.madrid-gigispizza.wedoteam.io:1521/dodbhp_pdb1.sub03010825490.devopsvcn.oraclevcn.com",
-            "user" : "microservice",
-            "password" : "AAZZ__welcomedevops123"
+            "date-format":"dd/MM/yyyy HH:mm:ss",
+            "date-ini":"20/06/2019 21:47:00",            
+            "connection-string":"jdbc:oracle:thin:@atplabpub_medium",
+            "client-credentials":"/home/holuser/wallets/wallet_atplabpub/",
+            "keystore-password":"Autonomous#2020",
+            "truststore-password":"Autonomous#2020",
+            "user":"microservice",
+            "password":"AAZZ__welcomedevops123"
         }
     }
 }

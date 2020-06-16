@@ -18,8 +18,6 @@
 
 package io.helidon.examples.quickstart.mp;
 
-import java.util.concurrent.TimeUnit;
-import java.net.URI;
 import java.util.Collections;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -47,7 +45,6 @@ import org.eclipse.microprofile.openapi.annotations.media.Schema;
 import org.eclipse.microprofile.openapi.annotations.parameters.RequestBody;
 import org.eclipse.microprofile.openapi.annotations.responses.APIResponse;
 import org.eclipse.microprofile.openapi.annotations.responses.APIResponses;
-import org.eclipse.microprofile.rest.client.RestClientBuilder;
 
 /**
  * A simple JAX-RS resource to greet you. Examples:
@@ -75,6 +72,8 @@ public class SimulatorResource {
     @Inject
     @ConfigProperty(name="maxThreads", defaultValue="20")
     private int maxThreads;
+
+    
 
     /**
      * The greeting message provider.
@@ -108,9 +107,6 @@ public class SimulatorResource {
      *                                .baseUri(URI.create("https://madrid-gigispizza.wedoteam.io"))
      *                                .build(OrderService.class);
      */
-    // @Inject
-    // @RestClient
-    private OrderService msOrchestrator;
 
     /**
      * Return a wordly greeting message.
@@ -303,14 +299,14 @@ public class SimulatorResource {
                 else{
                     if((resp = verifyThreadsJsonProperties(jsonObject.getJsonObject("sim-config"), "min-threads")) == null){
                         if((resp = verifyThreadsJsonProperties(jsonObject.getJsonObject("sim-config"), "max-threads")) == null){
-                            PizzaOrder pizzaOrder = new PizzaOrder(minThreads, maxThreads, true,
-                                                                    dataBaseObj.getString("connection-string"),
-                                                                    dataBaseObj.getString("user"),
-                                                                    dataBaseObj.getString("password"),
-                                                                    dataBaseObj.getString("client-credentials"),
-                                                                    dataBaseObj.getString("keystore-password"),
-                                                                    dataBaseObj.getString("truststore-password"));
-                            resp = pizzaOrder.createOrders(dataBaseObj.getString("date-format"), 
+                            PizzaOrderDB pizzaOrderDB = new PizzaOrderDB(minThreads, maxThreads,
+                                                            dataBaseObj.getString("connection-string"),
+                                                            dataBaseObj.getString("user"),
+                                                            dataBaseObj.getString("password"),
+                                                            dataBaseObj.getString("client-credentials"),
+                                                            dataBaseObj.getString("keystore-password"),
+                                                            dataBaseObj.getString("truststore-password"));
+                            resp = pizzaOrderDB.createOrders(dataBaseObj.getString("date-format"), 
                                                            dataBaseObj.getString("date-ini"),
                                                            jsonObject.getJsonObject("sim-config").getInt("num-orders"),
                                                            jsonObject.getJsonObject("sim-config").getString("pizza-status"));
@@ -326,10 +322,10 @@ public class SimulatorResource {
                     if((resp = verifyThreadsJsonProperties(jsonObject.getJsonObject("sim-config"), "min-threads")) == null){
                         if((resp = verifyThreadsJsonProperties(jsonObject.getJsonObject("sim-config"), "max-threads")) == null){
                             
-                            PizzaOrder pizzaOrder = new PizzaOrder(minThreads, maxThreads, jsonMsObj.getString("url"), 
+                            PizzaOrderMS pizzaOrderMS = new PizzaOrderMS(minThreads, maxThreads, jsonMsObj.getString("url"), 
                                                                                            jsonMsObj.getInt("connection-timeout"),
                                                                                            jsonMsObj.getInt("response-timeout"));
-                            resp = pizzaOrder.createOrders(jsonObject.getJsonObject("sim-config").getInt("num-orders"),
+                            resp = pizzaOrderMS.createOrders(jsonObject.getJsonObject("sim-config").getInt("num-orders"),
                                                            jsonObject.getJsonObject("sim-config").getString("pizza-status"));
                         }
                     } 

@@ -1,6 +1,6 @@
 package io.helidon.examples.quickstart.mp;
 
-import javax.enterprise.context.ApplicationScoped;
+import javax.enterprise.context.RequestScoped;
 import javax.json.JsonArray;
 import javax.json.JsonObject;
 import javax.ws.rs.Consumes;
@@ -13,7 +13,8 @@ import javax.ws.rs.core.MediaType;
 
 import org.eclipse.microprofile.rest.client.inject.RegisterRestClient;
 
-@ApplicationScoped
+//@ApplicationScoped
+//@RequestScoped
 @RegisterRestClient(configKey = "microservice-Orchestrator")
 public interface OrderService {
     @GET

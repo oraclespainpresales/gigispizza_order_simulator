@@ -71,13 +71,13 @@ public class DatabaseClient {
 
         System.setProperty("oracle.jdbc.driver.OracleDriver", "true");
         System.setProperty("oracle.jdbc.fanEnabled", "false");
-        System.setProperty("oracle.net.ssl_version", "1.2");        
+        System.setProperty("oracle.net.ssl_version", "1.2");       
         System.setProperty("javax.net.ssl.keyStore", clientCred + "/keystore.jks");
         System.setProperty("javax.net.ssl.keyStorePassword", keyStorePassword);
         System.setProperty("javax.net.ssl.trustStore", clientCred + "/truststore.jks");
         System.setProperty("javax.net.ssl.trustStorePassword", truststorePassword);
         System.setProperty("oracle.net.tns_admin", clientCred);
-
+        
         DriverManager.registerDriver(new oracle.jdbc.OracleDriver());
                 
         return DriverManager.getConnection(dbUrl, dbUser, dbPassword);
@@ -221,4 +221,61 @@ public class DatabaseClient {
         return dbresult;
     }
 
+    public String executeUpdateIngredients(JsonObject jsonPizzaOrder) { 
+        String dbresult = "";
+        Connection conn = null;
+        try {
+            conn = getConnectionThin();
+            if (conn!=null) {                
+                StringBuffer updateSQL = new StringBuffer("UPDATE MICROSERVICE.TOPPING_STORAGE SET consumed = consumed + 1, last_updated =  WHERE topping in (?,?,?) ");
+    
+                // logging values passed:
+                LOGGER.info(updateSQL.toString());
+                LOGGER.info("parameter 1 topping 1 : " + jsonPizzaOrder.getJsonObject("pizzaOrdered").getString("topping1"));
+                LOGGER.info("parameter 2 topping 2 : " + jsonPizzaOrder.getJsonObject("pizzaOrdered").getString("topping2"));
+                LOGGER.info("parameter 3 topping 3 : " + jsonPizzaOrder.getJsonObject("pizzaOrdered").getString("topping3"));
+    
+                PreparedStatement pstat = conn.prepareStatement(updateSQL.toString());
+    
+                pstat.setString(1,jsonPizzaOrder.getJsonObject("pizzaOrdered").getString("topping1"));
+                pstat.setString(2,jsonPizzaOrder.getJsonObject("pizzaOrdered").getString("topping2"));
+                pstat.setString(3,jsonPizzaOrder.getJsonObject("pizzaOrdered").getString("topping3"));
+    
+                if (pstat.executeUpdate() > 0){
+                    dbresult = "Payment for orderId["+jsonPizzaOrder.getString("orderId")+"] inserted OK!";
+                }
+                else {
+                    LOGGER.log(Level.SEVERE,"ERROR IN DB INSERT orderId["+jsonPizzaOrder.getString("orderId")+"] result <= 0");
+                    dbresult = "ERROR IN DB INSERT orderId["+jsonPizzaOrder.getString("orderId")+"] result <= 0";
+                }
+                conn.close();
+            }
+            else {
+                LOGGER.log(Level.SEVERE,"ERROR ["+jsonPizzaOrder.getString("orderId")+"] Connection null!");
+                dbresult = "ERROR ["+jsonPizzaOrder.getString("orderId")+"] Connection null!";
+            }
+        }
+        catch (Exception ex){
+            try{
+                if (conn!=null)
+                    conn.close();
+            }
+            catch(SQLException sqlex){
+                LOGGER.log(Level.SEVERE,"ERROR close connection on Order ["+jsonPizzaOrder.getString("orderId")+"] " + ex.getMessage());    
+            }
+            ex.printStackTrace();
+            LOGGER.log(Level.SEVERE,"ERROR ["+jsonPizzaOrder.getString("orderId")+"] " + ex.getMessage());
+            dbresult = "ERROR ["+jsonPizzaOrder.getString("orderId")+"] " + ex.getMessage();
+        }
+        finally{
+            try{
+                if (conn!=null)
+                    conn.close();
+            }
+            catch(SQLException sqlex){
+                LOGGER.log(Level.SEVERE,"ERROR close connection on Order ["+jsonPizzaOrder.getString("orderId")+"] " + sqlex.getMessage());    
+            }
+        }
+        return dbresult;
+    }
 }
