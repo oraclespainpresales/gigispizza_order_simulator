@@ -132,10 +132,18 @@ public class PizzaOrder {
 
         return new String[] { toppings[selected[0]], toppings[selected[1]], toppings[selected[2]] };
     }
+
+    private String[] genLongLat(){        
+        String coorLong = "-3." + Integer.toString(genNumber(607759, 811779));
+        String coorLat  = "40." + Integer.toString(genNumber(385053, 551042));
+        
+        return new String[] {coorLong,coorLat};
+    }
     
     protected JsonObject createJsonPizzaOrder(String dateFormat, String date, int segsCal, String pizzaStatus) {
         String[] strOrderDate = getOrderIdAndDateTime(dateFormat, date, segsCal);
         String[] strToppings  = genToppings();
+        String[] strCoords    = genLongLat();
         int totalPrice        = genNumber(10,20);
         int originalPrice     = totalPrice + genNumber(0, 3);
         JsonObject jsonResp   = null; 
@@ -153,8 +161,8 @@ public class PizzaOrder {
                 .build();        
             JsonObject jsonOBJStreetBody = JSON.createObjectBuilder()            
                 .add("name", "SimStreet")
-                .add("long", "-3.692763")
-                .add("lat", "40.484408")
+                .add("long", strCoords[0])
+                .add("lat", strCoords[1])
                 .build();
             JsonObject jsonOBJCustomerAddrBody = JSON.createObjectBuilder()            
                 .add("street", jsonOBJStreetBody)            

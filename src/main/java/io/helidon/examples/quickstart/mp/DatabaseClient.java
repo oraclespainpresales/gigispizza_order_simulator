@@ -160,7 +160,7 @@ public class DatabaseClient {
                                                 .append("ORIGINALPRICE").append(",")
                                                 .append("TOTALPAID").append(",")
                                                 .append("CUSTOMERID").append(")")
-                                                .append(" VALUES (PAYMENT_SEQ.nextval,")
+                                                .append(" VALUES (MICROSERVICE.PAYMENT_SEQ.nextval,")
                                                 .append("?,TO_TIMESTAMP(?,'YYYY-MM-DD\"T\"HH24:MI:SS.ff3\"Z\"'),?,?,?,?)");
     
                 // logging values passed:

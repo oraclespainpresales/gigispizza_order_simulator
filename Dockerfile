@@ -40,5 +40,3 @@ COPY --from=build /helidon/target/helidon-quickstart-mp.jar ./
 COPY --from=build /helidon/target/libs ./libs
 
 CMD ["java", "-jar", "helidon-quickstart-mp.jar"]
-
-EXPOSE 8080
