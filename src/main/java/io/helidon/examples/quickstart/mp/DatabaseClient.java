@@ -242,7 +242,61 @@ public class DatabaseClient {
                 pstat.setString(3,jsonPizzaOrder.getJsonObject("pizzaOrdered").getString("topping3"));
     
                 if (pstat.executeUpdate() > 0){
-                    dbresult = "Payment for orderId["+jsonPizzaOrder.getString("orderId")+"] inserted OK!";
+                    dbresult = "toppings for orderId["+jsonPizzaOrder.getString("orderId")+"] inserted OK!";
+                }
+                else {
+                    LOGGER.log(Level.SEVERE,"ERROR IN DB INSERT orderId["+jsonPizzaOrder.getString("orderId")+"] result <= 0");
+                    dbresult = "ERROR IN DB INSERT orderId["+jsonPizzaOrder.getString("orderId")+"] result <= 0";
+                }
+                conn.close();
+            }
+            else {
+                LOGGER.log(Level.SEVERE,"ERROR ["+jsonPizzaOrder.getString("orderId")+"] Connection null!");
+                dbresult = "ERROR ["+jsonPizzaOrder.getString("orderId")+"] Connection null!";
+            }
+        }
+        catch (Exception ex){
+            try{
+                if (conn!=null)
+                    conn.close();
+            }
+            catch(SQLException sqlex){
+                LOGGER.log(Level.SEVERE,"ERROR close connection on Order ["+jsonPizzaOrder.getString("orderId")+"] " + ex.getMessage());    
+            }
+            ex.printStackTrace();
+            LOGGER.log(Level.SEVERE,"ERROR ["+jsonPizzaOrder.getString("orderId")+"] " + ex.getMessage());
+            dbresult = "ERROR ["+jsonPizzaOrder.getString("orderId")+"] " + ex.getMessage();
+        }
+        finally{
+            try{
+                if (conn!=null)
+                    conn.close();
+            }
+            catch(SQLException sqlex){
+                LOGGER.log(Level.SEVERE,"ERROR close connection on Order ["+jsonPizzaOrder.getString("orderId")+"] " + sqlex.getMessage());    
+            }
+        }
+        return dbresult;
+    }
+
+    public String executeUpdateBasePizza(JsonObject jsonPizzaOrder) { 
+        String dbresult = "";
+        Connection conn = null;
+        try {
+            conn = getConnectionThin();
+            if (conn!=null) {                
+                StringBuffer updateSQL = new StringBuffer("UPDATE MICROSERVICE.BASEPIZZA_STORAGE SET consumed = consumed + 1 WHERE basepizza LIKE ? ");
+    
+                // logging values passed:
+                LOGGER.info(updateSQL.toString());
+                LOGGER.info("parameter 1 basetype : " + jsonPizzaOrder.getJsonObject("pizzaOrdered").getString("baseType"));
+    
+                PreparedStatement pstat = conn.prepareStatement(updateSQL.toString());
+    
+                pstat.setString(1,"%" + jsonPizzaOrder.getJsonObject("pizzaOrdered").getString("baseType"));
+    
+                if (pstat.executeUpdate() > 0){
+                    dbresult = "basetype for orderId["+jsonPizzaOrder.getString("orderId")+"] inserted OK!";
                 }
                 else {
                     LOGGER.log(Level.SEVERE,"ERROR IN DB INSERT orderId["+jsonPizzaOrder.getString("orderId")+"] result <= 0");

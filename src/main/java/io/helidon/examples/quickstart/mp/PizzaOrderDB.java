@@ -102,6 +102,7 @@ public class PizzaOrderDB extends PizzaOrder {
                 LOGGER.info(dbClient.executeInsertOrder(pizzaOrder));
                 LOGGER.info(dbClient.executeInsertPayment(pizzaPayment));
                 LOGGER.info(dbClient.executeUpdateIngredients(pizzaOrder));
+                LOGGER.info(dbClient.executeUpdateBasePizza(pizzaOrder));
             }
             catch (Exception ex){
                 ex.printStackTrace();
