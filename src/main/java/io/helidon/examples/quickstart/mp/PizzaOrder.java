@@ -46,7 +46,7 @@ public class PizzaOrder {
         StringBuilder strOrderId = new StringBuilder().append(dateCal.get(Calendar.YEAR))
                 .append((dateCal.get(Calendar.MONTH) + 1) < 10 ? "0" + (dateCal.get(Calendar.MONTH) + 1) : (dateCal.get(Calendar.MONTH) + 1))
                 .append(dateCal.get(Calendar.DATE)        < 10 ? "0" + dateCal.get(Calendar.DATE)        : dateCal.get(Calendar.DATE))
-                .append(dateCal.get(Calendar.HOUR)        < 10 ? "0" + dateCal.get(Calendar.HOUR_OF_DAY) : dateCal.get(Calendar.HOUR_OF_DAY))
+                .append(dateCal.get(Calendar.HOUR_OF_DAY) < 10 ? "0" + dateCal.get(Calendar.HOUR_OF_DAY) : dateCal.get(Calendar.HOUR_OF_DAY))
                 .append(dateCal.get(Calendar.MINUTE)      < 10 ? "0" + dateCal.get(Calendar.MINUTE)      : dateCal.get(Calendar.MINUTE))
                 .append(dateCal.get(Calendar.SECOND)      < 10 ? "0" + dateCal.get(Calendar.SECOND)      : dateCal.get(Calendar.SECOND))
                 .append(genNumber(100, 999));
